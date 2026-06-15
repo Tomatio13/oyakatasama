@@ -410,7 +410,34 @@ Beastmode is not just an execution framework—it's a learning system. Every run
 
 **The goal:** Beastmode should get cheaper, faster, and more reliable over time as the learning loop promotes lessons into permanent improvements.
 
+## Context Management (Critical)
+
+Beastmode runs accumulate context fast — subagent outputs, tool results, file diffs, planning docs. Without active management, you'll hit 300-500KB in 10-15 minutes, causing compression timeouts and /compact failures.
+
+**Hard rules:**
+
+1. **Compact every 5-10 minutes** — don't wait for context to break. Run `/compact` after each major phase (planning, execution, QA, merge).
+2. **Limit sessions to 30 minutes** — save state (commit work, write learnings), start fresh, resume from saved state.
+3. **Subagent output summarization** — instruct subagents to return only final results (files changed, tests passed/failed, issues), not intermediate tool outputs. One subagent task should add <10KB to context, not 100KB.
+4. **Break large tasks into small units** — one subagent = one small, bounded task. "Implement auth system" = 200KB output. "Create User model" + "Implement /login" + "Add password hashing" = 3x 20KB outputs.
+5. **Enable headroom fail-open mode** — set `HEADROOM_WS_FAIL_OPEN_ON_COMPRESSION_FAILURE=1` in headroom launchd plist. Makes headroom pass through uncompressed instead of returning 413 errors.
+6. **Use layered compression** — squeez (CLI output, 60-95%) + headroom (API layer, 60-95%) = 70-80% total savings. Watch for compression tax (agent asking more follow-ups = compression too aggressive).
+7. **Compact after 3+ subagent delegations** — rule of thumb. If you've delegated 3 tasks, compact before continuing.
+
+**Alert thresholds:**
+- Context size > 200KB → compact now
+- Compression failures > 3/hour → enable fail-open or increase timeout
+- Session duration > 30 minutes → save state and restart
+
+**What NOT to compress:**
+- Error messages and stack traces (need full context for debugging)
+- Small files (< 100 lines) — compression overhead > savings
+- Structured data the agent needs to parse exactly (JSON APIs, CSV)
+
+See `references/context-rot-mitigation.md` for full details on architectural fixes and monitoring.
+
 ## References
 
+- **Context rot mitigation:** See `references/context-rot-mitigation.md` for detailed analysis of context accumulation, architectural fixes, and monitoring strategies.
 - **Orchestration comparison:** See `references/orchestration-comparison.md` for the evolution from early prototypes to the current harness-agnostic beastmode.
 - **Public sharing checklist:** See `references/public-sharing-checklist.md` for sanitization guidelines when publishing beastmode skills publicly.
