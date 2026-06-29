@@ -15,7 +15,7 @@ agents: [hermes, codex, openclaw, claude-code]
 
 # Beastmode: Multi-Agent Orchestration Framework
 
-Beastmode is a structured approach to multi-agent software development that separates high-judgment work (planning, architecture, review) from routine execution (implementation, tests, docs) across different model tiers, with strict cost discipline and a self-improving learning loop.
+Beastmode is a structured approach to multi-agent software development that separates high-judgment work (planning, architecture, review) from routine execution (implementation, tests, docs) across different model tiers, with strict cost discipline and a self-improving learning loop. It is designed for MofA (Mixture of Agents) orchestration and pairs well with MemroOS/memroos-style durable memory for long-running agent goals.
 
 **Harness-agnostic:** Works with Ultraswarm, GSD, `delegate_task`, Claude Code subagents, or manual orchestration. No specific tool required.
 

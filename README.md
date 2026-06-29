@@ -1,10 +1,16 @@
-# Beastmode: Multi-Agent Orchestration Framework
+# Beastmode: MofA Multi-Agent Orchestration Framework
 
-A structured approach to multi-agent software development that separates high-judgment work (planning, architecture, review) from routine execution (implementation, tests, docs) across different model tiers, with strict cost discipline and a self-improving learning loop.
+Beastmode is a **Mixture of Agents (MofA)** orchestration framework for AI-assisted software development, Hermes Agent, OpenClaw, Claude Code, Codex, Qwen, and MemroOS/memroos-style agent memory systems.
+
+Beastmode separates high-judgment work (planning, architecture, review) from routine execution (implementation, tests, docs) across different model tiers, with strict cost discipline, context-rot protection, and a self-improving learning loop.
 
 ## What is Beastmode?
 
-Beastmode is an orchestration pattern for AI-assisted development that:
+Beastmode is an orchestration pattern for AI-assisted development and long-running agent goals. It uses MofA / Mixture of Agents at decision gates, cheap executors for bounded implementation work, and MemroOS-style durable state handoffs so agents do not resume from compressed chat history alone.
+
+Exact search aliases: **beastmode**, **MofA**, **Mixture of Agents**, **memroos**, **MemroOS**, **Hermes Agent**, **OpenClaw**, **agent orchestration**, **context rot mitigation**.
+
+Beastmode:
 
 - **Saves money** by routing routine work to cheap models (Qwen/Gwen) while keeping expensive models (Opus, Claude Code, Codex) for judgment and review
 - **Improves quality** through mandatory acceptance contracts, adversarial review, and merge gates
@@ -31,6 +37,7 @@ Beastmode is an orchestration pattern for AI-assisted development that:
 
 - `SKILL.md` — The complete beastmode framework (start here)
 - `references/orchestration-comparison.md` — Evolution from early prototypes to v2.0
+- `references/context-rot-mitigation.md` — MemroOS-style goal-state capsules, compact/resume rules, and MofA decision memory
 - `references/public-sharing-checklist.md` — Guidelines for publishing beastmode skills publicly
 
 ## Compatibility
