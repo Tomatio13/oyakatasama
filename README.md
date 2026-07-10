@@ -1,54 +1,50 @@
-# Beastmode: MofA Multi-Agent Orchestration Framework
+# Oyakata
 
-Beastmode is a **Mixture of Agents (MofA)** orchestration framework for AI-assisted software development, Hermes Agent, OpenClaw, Claude Code, Codex, Qwen, and MemroOS/memroos-style agent memory systems.
+Oyakata is a Codex-centered workflow for non-trivial software work. Codex plans and reviews; the implementation executor is chosen from live CodexBar quota data; Antigravity handles web research and bounded documentation tasks; Grok handles X research.
 
-Beastmode separates high-judgment work (planning, architecture, review) from routine execution (implementation, tests, docs) across different model tiers, with strict cost discipline, context-rot protection, and a self-improving learning loop.
+## Role map
 
-## What is Beastmode?
+- **Lead / Reviewer:** Codex with `gpt-5.6-medium`
+- **Implementation:** `grok` with `grok-4.5`, or `opencode` with `zai-coding-plan/glm-5.2`
+- **Documentation:** `agy` with `Gemini 3.5 Flash (Medium)`
+- **Web research:** `agy`
+- **X research:** `grok`
 
-Beastmode is an orchestration pattern for AI-assisted development and long-running agent goals. It uses MofA / Mixture of Agents at decision gates, cheap executors for bounded implementation work, and MemroOS-style durable state handoffs so agents do not resume from compressed chat history alone.
+Codex retains architecture, security, acceptance, and final-approval decisions.
 
-Exact search aliases: **beastmode**, **MofA**, **Mixture of Agents**, **memroos**, **MemroOS**, **Hermes Agent**, **OpenClaw**, **agent orchestration**, **context rot mitigation**.
+## Use
 
-Beastmode:
+Start Codex in the target Git repository and request Oyakata explicitly:
 
-- **Saves money** by routing routine work to cheap models (Qwen/Gwen) while keeping expensive models (Opus, Claude Code, Codex) for judgment and review
-- **Improves quality** through mandatory acceptance contracts, adversarial review, and merge gates
-- **Gets better over time** via a self-improvement loop that records lessons and promotes repeated patterns into skills/config
-- **Works anywhere** — harness-agnostic, compatible with Ultraswarm, GSD, `delegate_task`, Claude Code subagents, or manual git workflows
+```text
+$oyakata
 
-## Core Principle
+Implement user registration with duplicate-email protection and tests.
+Update the README to match the implemented behavior.
+```
 
-**Expensive models decide. Cheap models build. The loop learns.**
+## Execution loop
 
-## Two Variants
+1. Codex creates a shared task ledger in `TODO.md`. If an unrelated `TODO.md` already exists, it uses `.oyakata/TODO.md`.
+2. Codex records the goal, non-goals, bounded tasks, acceptance checks, and escalation conditions.
+3. For every implementation delegation, Codex runs `~/Workspace/CodexBar/Scripts/codexbar-fast.sh usage --pretty`.
+4. Codex compares the safe remaining quota and reset time for the `grok` and `zai` providers, then routes the task to `grok` or `opencode`.
+5. The executor completes only its assigned task IDs, runs their checks, and updates its task checkboxes and execution notes.
+6. After all assigned tasks are done, Codex independently reviews the diff and runs verification.
+7. If review finds issues, Codex writes remediation task IDs into the same ledger, refreshes quota data, and delegates the fixes again.
+8. Codex alone approves the result and closes the task ledger.
 
-- **Opus-led:** Maximum judgment for product/creative/architecture decisions. Opus directs, Codex challenges, Qwen executes.
-- **Codex-led:** Cost-efficient lead with strong gates. Codex plans and reviews, Qwen executes.
+Executors cannot approve their own work or close review findings.
 
-## Quick Start
+## Routing rule
 
-1. Read `SKILL.md` — the full framework
-2. Choose your variant (Opus-led or Codex-led)
-3. Choose your harness (Ultraswarm, GSD, delegate_task, Claude Code subagents, or manual git)
-4. Follow the beastmode loop: Preflight → Acceptance Contract → Plan → Delegate → Review → Merge → Self-Improve
+For each provider, use the smallest remaining percentage among all applicable quota windows. Prefer the larger value. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, prefer Grok. If neither quota result is usable, Codex keeps the work instead of guessing.
 
 ## Files
 
-- `SKILL.md` — The complete beastmode framework (start here)
-- `references/orchestration-comparison.md` — Evolution from early prototypes to v2.0
-- `references/context-rot-mitigation.md` — MemroOS-style goal-state capsules, compact/resume rules, and MofA decision memory
-- `references/public-sharing-checklist.md` — Guidelines for publishing beastmode skills publicly
-
-## Compatibility
-
-Works with:
-- **Claude Code** (Opus-led or Codex-led)
-- **Hermes Agent** (Codex-led with delegate_task)
-- **OpenClaw** (Codex-led with delegate_task)
-- **Codex CLI** (Codex-led with subagents)
-- **Any agent environment** with git and model access
+- `SKILL.md` — the complete workflow and command templates
+- `README.md` — this overview
 
 ## License
 
-MIT — use it, fork it, improve it.
+MIT
