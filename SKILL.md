@@ -1,91 +1,72 @@
 ---
 name: oyakata
-description: Orchestrate software work by keeping Codex with GPT-5.6 medium as Lead and Reviewer, routing implementation to Grok or OpenCode according to live CodexBar quota and reset data, routing web search and documentation to Antigravity, and routing X search to Grok. Use for non-trivial implementation, review, refactoring, testing, research, or documentation tasks that benefit from role separation and quota-aware provider selection.
+description: Orchestrate software work with a user-editable executors.yaml, one .oyakata/L-NNN_short_goal.yaml local task contract per goal, task-level executor assignment, and CodexBar quota-aware routing. Use for non-trivial implementation, review, refactoring, testing, research, or documentation tasks that benefit from role separation and configurable commands and models.
 ---
 
 # Oyakata
 
-Separate judgment, implementation, and documentation. Keep Codex in control of scope and quality; delegate bounded production work to the configured command whose provider currently has the safer quota.
+Separate judgment, implementation, and documentation. Keep the configured Lead in control of scope and quality; delegate bounded production work to task-assigned executors.
 
-## Fixed role map
+## Runtime definitions
 
-- Lead: run in the current Codex session with `gpt-5.6-medium`.
-- Reviewer: run in the current Codex session with `gpt-5.6-medium`.
-- Grok executor: run `grok` with `grok-4.5`.
-- Z.ai executor: run `opencode` with `zai-coding-plan/glm-5.2`.
-- Documentation executor: run `agy` with `Gemini 3.5 Flash (Medium)`.
-- Web search: use `agy`.
-- X search: use `grok`.
-- Do not route architecture, security decisions, acceptance decisions, or final sign-off away from Codex.
+Before creating a goal contract or delegating work, read [executors.yaml](executors.yaml) from this skill directory. It is the only source of truth for the Lead, Reviewer, executor IDs, commands, arguments, models, quota-provider mappings, research routing, and quota-selection candidates.
 
-Treat the model strings above as the intended logical models. Before the first delegation, use the CLI's model-list or help command if the installed CLI requires a different exact model identifier. Do not silently substitute a different model family.
+Run the configuration check before creating or assigning a task. It must exit 0:
+
+```bash
+python3 <skill-dir>/scripts/validate_executors.py <skill-dir>/executors.yaml <skill-dir>/references/.todo.yaml
+```
+
+Use only an executor ID defined under `executors`, except for a selector ID defined under `selection`. Expand `{repo}`, `{model}`, and `{prompt}` in its `args` before invoking its `command`; do not add unlisted flags or silently substitute a model. Keep architecture, security decisions, acceptance decisions, and final sign-off in the configured Lead session.
 
 ## Workflow
 
-### 1. Create the shared task ledger
+### 1. Initialize the goal-specific task contract
 
-Before delegation, create or replace a project-root `TODO.md` for the current Oyakata run. Preserve an unrelated existing `TODO.md`; if one exists, use `.oyakata/TODO.md` instead and tell every participant the chosen path.
+Before delegation or any code edit, select exactly one active contract under project-root `.oyakata/`.
 
-Use this structure:
+1. For a new user-visible goal, create `.oyakata/` if needed and copy [references/.todo.yaml](references/.todo.yaml) from this skill to `.oyakata/L-<next-number>_<short-goal>.yaml`. Never overwrite or reuse an existing contract.
+2. Determine `<next-number>` from the greatest existing `L-NNN_*.yaml` number plus one, zero-padded to at least three digits. Start at `001` when none exists.
+3. Use a concise lowercase ASCII `<short-goal>` of two to five words joined by underscores, for example `auth_refactor` or `payment_api`.
+4. For a follow-up to an existing goal, reuse only that goal's contract. Identify its exact path before delegating; do not create a second contract for the same goal.
+5. Read the active contract's `project.goal`, `project.constraints`, `project.success_criteria`, and every `backlog` item.
+6. Replace template placeholders with the user-visible goal, constraints, success criteria, and bounded tasks before assigning work. Give every task a stable ID, exact `target_files`, a local `verification` command or objective manual procedure, and an `executor`.
 
-```markdown
-# Oyakata Task Ledger
+Set each task's `executor` to an `executors` or `selection` key in `executors.yaml`. Use a selector only when the Lead intentionally delegates the implementation choice to that selector's quota rule.
 
-## Contract
+The active `.oyakata/L-NNN_<short-goal>.yaml` is the single source of truth for that goal's scope and progress. Completed contracts remain in `.oyakata/` as immutable goal history, except for a later Lead-created remediation task for the same goal. The Lead owns contract selection, task creation, task assignment, review decisions, and the project contract. Executors may update only the status of their assigned task and append a concise project-specific item to `learnings` after a verified completion. Only the Lead may change a task's `executor`; append each assignment or reassignment to `executor_history` without overwriting earlier entries.
 
-- Goal: <user-visible outcome>
-- Non-goals: <scope boundaries>
-- Likely files: <paths>
-- Verification: <commands and manual checks>
-- Escalation: <conditions reserved for Lead>
+### 2. Follow the four-part operating protocol
 
-## Plan
+Before changing even one line of implementation or documentation, the Lead and every executor must:
 
-- [ ] T01 <bounded implementation task>
-  - Owner: executor
-  - Acceptance: <observable result>
-  - Verify: `<command>`
-- [ ] T02 <bounded documentation task>
-  - Owner: documentation
-  - Acceptance: <observable result>
-  - Verify: <inspection or command>
+1. **Fix the context:** Read the active goal contract, confirm `project.goal` and `project.constraints`, change the assigned task from `pending` to `in_progress`, and save it.
+2. **Respect the edit boundary:** Edit only paths in that task's `target_files`. The only exception is the active goal contract, which executors may update solely for the assigned task's status and `learnings`; the Lead may additionally update `executor` and append an `executor_history` entry before execution. Do not add unrequested code or files.
+3. **Verify objectively:** Run the task's `verification` locally after implementation. Do not start another task unless it exits successfully (`exit 0`) or its stated manual check passes completely.
+4. **Synchronize progress and learning:** After successful verification, change the task status to `completed`. If a project-specific bug pattern or specification trap was found, append it as one concise line to `learnings` before handing off.
 
-## Executor notes
+If verification fails, keep the task `in_progress`, record no completion, and report the exact command and failure to the Lead. Do not weaken, skip, or replace the specified verification without the Lead's explicit task-contract update.
 
-- <task ID>: <files changed, verification result, unresolved issue>
+### 3. Classify the work
 
-## Codex review
-
-- Status: pending
-- Round: 0
-- Findings: none
-
-## Final status
-
-- Status: in_progress
-- Approved by: pending
-```
-
-Codex owns the Contract, Plan, Codex review, and Final status sections. Executors may check only tasks they completed and append concise Executor notes. Keep task IDs stable across review rounds. Never treat a checked box as proof; it only means the executor claims completion.
-
-### 2. Classify the work
-
-- Keep planning, architecture, investigation conclusions, risk decisions, and review in Codex.
-- Route code changes, tests, mechanical refactors, and implementation-focused debugging through the implementation selector.
-- Route prose documentation, README updates, migration guides, release notes, and user-facing explanations to `agy`.
-- Route web research to `agy`; route X research to `grok`.
-- For a mixed task, split code and documentation into separate tasks. Review both in Codex.
+- Keep planning, architecture, investigation conclusions, risk decisions, and review in the configured Lead session.
+- Assign every task an explicit `executor` in the active goal contract; honor it instead of inferring from the task title or file type.
+- Use a `selection` key only for code changes, tests, mechanical refactors, and implementation-focused debugging that the Lead wants CodexBar to route.
+- Use the `research` executor IDs from `executors.yaml` for web and X research.
+- For a mixed task, split code and documentation into separate tasks. Review both in the configured Reviewer session.
 - Handle a trivial one-file edit directly only when delegation overhead is larger than the work.
 
-### 3. Select an implementation executor
+### 4. Select an implementation executor
 
-Immediately before each implementation delegation, run:
+For a task assigned to a `selection` key, immediately before delegation, use the user-installed official CodexBar CLI. Never download, install, update, or configure CodexBar during an Oyakata run.
 
 ```bash
-~/Workspace/CodexBar/Scripts/codexbar-fast.sh usage --pretty
+codexbar usage --provider <candidate quota_provider> --format json --pretty --no-color
 ```
 
-Read the `grok` and `zai` provider entries. For each provider:
+For a selector, read every executor ID from `selection.<selector>.candidates`, resolve each `quota_provider`, then run and parse one command per candidate. If `codexbar` is not on `PATH`, a command returns a non-zero exit status, or a response cannot be parsed, set the task's `executor` to `selection.<selector>.fallback_executor`, append the reason to `executor_history`, and delegate with that configured executor.
+
+If CodexBar succeeds, read the configured quota-provider entries. For each provider:
 
 1. Reject an entry that is disabled, stale without usable quota data, or reports an error.
 2. Inspect every applicable rate-limit window, including primary, secondary, tertiary, and extra windows.
@@ -93,80 +74,54 @@ Read the `grok` and `zai` provider entries. For each provider:
 4. Calculate `next_reset` as the earliest future reset among the windows that determine `safe_remaining`.
 5. Never infer unlimited capacity from a missing window or missing percentage.
 
-Choose with this order:
+For a selector, choose among its configured candidates with this order:
 
-1. Prefer the provider with the larger `safe_remaining`.
-2. If the difference is at most 5 percentage points, prefer the provider with the earlier `next_reset`.
-3. If still tied, prefer `grok` to avoid arbitrary route flapping.
-4. If one provider has valid data and the other does not, use the valid provider.
-5. If neither provider has valid data, do not guess. Report the quota lookup failure and ask the Lead to choose or execute the task.
+1. Discard candidates without valid quota data.
+2. Find the highest `safe_remaining` among the remaining candidates.
+3. Keep every remaining candidate within 5 percentage points of that highest value, then choose the earliest `next_reset` among them.
+4. If candidates remain tied, choose `selection.<selector>.tie_breaker` when it is tied; otherwise choose the first tied candidate in `candidates` order.
+5. If no candidate has valid data, set `executor` to `selection.<selector>.fallback_executor`, append the unavailable quota data to `executor_history`, and use that configured executor.
 
 Do not use reset proximity to justify sending work to a provider with materially less remaining quota. Re-run the command before every new executor task; do not reuse an old result across phases.
 
-Record the decision briefly:
+Record the actual executor in the task's `executor` and append a decision to `executor_history`:
 
 ```text
-Route: grok | zai
-Quota: grok=<safe_remaining>, zai=<safe_remaining>
-Reset: grok=<next_reset>, zai=<next_reset>
-Reason: <one sentence>
+executor: <selected executor ID>
+executor_history:
+  - executor: <selected executor ID>
+    reason: "Quota: <candidate>=<safe_remaining>; Reset: <candidate>=<next_reset>; <reason>"
+    changed_by: lead
 ```
 
-### 4. Delegate implementation
+### 5. Delegate implementation
 
 Use non-interactive commands so the Lead can capture and review the result. Preserve repository instructions and least-privilege permissions.
 
-Include the ledger path in every executor prompt. Tell the executor to:
+Read each task's `executor` before delegation. Run the corresponding command, arguments, and model from `executors.yaml`; run the configured Lead executor in the current Lead session. Build every executor prompt with the active goal-contract absolute path, its assigned task IDs, each assigned task's `target_files`, and the following mandatory instructions:
 
-1. Read the Contract and its assigned unchecked task IDs before editing.
-2. Work only on those task IDs.
+```text
+Read <active-contract-path>. Assigned task IDs: <IDs>. Work only on those tasks and their target_files. Set each task in_progress before editing. Run its verification. Set completed only after success. Leave failures in_progress and report the exact blocker. Do not review.
+```
+
+1. Read `project` and its assigned `pending` task IDs before editing.
+2. Change each assigned task to `in_progress` before editing and work only on its `target_files`.
 3. Run each task's verification command.
-4. Check a task only after its acceptance criteria pass.
-5. Leave a failed task unchecked and record the exact blocker in Executor notes.
-6. Stop after all assigned tasks are checked or explicitly blocked; do not perform Codex review.
-
-Grok route:
-
-```bash
-grok --single "Read <ledger path>. Complete the assigned unchecked task IDs, verify them, update their checkboxes and Executor notes, then stop." \
-  --model grok-4.5 \
-  --cwd "$REPO" \
-  --permission-mode acceptEdits \
-  --check
-```
-
-Z.ai route:
-
-```bash
-opencode run \
-  --model zai-coding-plan/glm-5.2 \
-  --agent build \
-  --dir "$REPO" \
-  "Read <ledger path>. Complete the assigned unchecked task IDs, verify them, update their checkboxes and Executor notes, then stop."
-```
+4. Set a task to `completed` only after its verification passes, and append any project-specific learning.
+5. Keep a failed task `in_progress` and return the exact blocker.
+6. Stop after all assigned tasks complete or one is blocked; do not perform Codex review.
 
 Run the executor in an isolated branch or worktree for non-trivial changes when the active harness supports it. Do not grant bypass permissions by default. Tell the executor to return only files changed, verification results, and unresolved issues.
 
-### 5. Delegate documentation
+### 6. Delegate documentation
 
-Use Antigravity independently of the implementation quota comparison:
+Give the configured documentation executor only task IDs assigned to its executor ID. Require it to inspect implemented behavior and relevant tests, use only its configured command and model, and follow the same status, file-boundary, verification, and learning rules as an implementation executor.
 
-```bash
-agy --print \
-  --model "Gemini 3.5 Flash (Medium)" \
-  --mode accept-edits \
-  "<documentation acceptance contract and source-of-truth paths>"
-```
+### 7. Review in the configured Reviewer session
 
-Require the documentation executor to inspect the implemented behavior and relevant tests. Do not let it invent commands, configuration, or runtime behavior. If the exact installed model identifier differs, resolve it with `agy models` first.
+Do not start review until every assigned backlog task is `completed`. If any task remains `pending` or `in_progress`, resolve its route before review rather than pretending the phase is complete.
 
-Give `agy` only documentation-owned task IDs from the ledger. Require it to update the corresponding checkboxes and Executor notes under the same rules as an implementation executor.
-
-### 6. Review in Codex
-
-Do not start Codex review until every Plan task is checked or carries an explicit blocker. If a task is blocked, resolve its route before review rather than pretending the phase is complete.
-
-The Codex Reviewer must return to the current Codex session, inspect the actual diff, and independently run appropriate verification. Reject work when:
+The configured Reviewer must inspect the actual diff and independently run appropriate verification. Reject work when:
 
 - acceptance criteria are missing;
 - tests fail or relevant error cases lack coverage;
@@ -177,39 +132,33 @@ The Codex Reviewer must return to the current Codex session, inspect the actual 
 
 Never accept an executor's self-report as verification.
 
-Update the ledger after every review:
+Record review findings in the Lead's handoff with a stable ID such as `R1-01`, severity, affected file, required correction, and verification command. On changes requested, add a new `pending` remediation task such as `R1-01` to the active goal contract; do not reopen a completed original task. Keep remediation `target_files` exact and use a real verification command.
 
-- Increment `Round`.
-- Set review `Status` to `approved`, `changes_requested`, or `blocked`.
-- Record each finding with a stable ID such as `R1-01`, its severity, affected file, required correction, and verification command.
-- On approval, set Final status to `approved` and name Codex as approver.
-- On changes requested, add new unchecked remediation tasks such as `R1-01` to Plan. Do not reopen completed original tasks.
-
-### 7. Rework loop
+### 8. Rework loop
 
 For `changes_requested`:
 
 1. Refresh CodexBar usage instead of automatically reusing the previous executor.
-2. Select `grok` or `zai` with the normal quota rule.
-3. Delegate only the unchecked remediation task IDs and their review findings.
-4. Require the executor to correct, verify, check the remediation tasks, and append Executor notes.
+2. Keep the remediation task's explicit `executor`; use the normal quota rule only when it names a `selection` key.
+3. Delegate only the `pending` remediation task IDs and their review findings.
+4. Require the executor to correct, verify, set the remediation task to `completed`, and append any relevant learning.
 5. Return to Codex and perform a new full review of the resulting diff, not only the latest patch.
 6. Repeat until Codex approves or an escalation condition is met.
 
-Do not let an executor mark review findings resolved, change review status, or approve its own work. Codex alone closes findings through the next review result.
+Do not let an executor mark review findings resolved, change review status, or approve its own work. The configured Reviewer alone closes findings through the next review result.
 
 ## Escalation
 
-Return implementation to Codex when:
+Return implementation to the configured Lead when:
 
 - security, authentication, payments, privacy, data loss, or production incidents are involved;
 - the task requires a non-obvious architecture or product tradeoff;
 - the selected executor fails the same acceptance check twice;
 - two review rounds reject the same underlying issue;
-- both implementation quotas are unavailable or unsafe;
+- every quota-selector candidate is unavailable or unsafe;
 - the generated diff is too broad to review reliably.
 
-After one executor fails for a provider-specific reason, refresh CodexBar usage before trying the alternate executor. Do not alternate indefinitely.
+After one executor fails for a provider-specific reason, refresh CodexBar usage before trying the selector's next eligible candidate. Do not alternate indefinitely.
 
 ## Completion report
 
@@ -217,10 +166,10 @@ End with:
 
 ```text
 Result: <completed or blocked>
-Lead/Reviewer: Codex + gpt-5.6-medium
-Task ledger: <TODO.md path and final status>
-Implementation route: <grok + grok-4.5 | opencode + zai-coding-plan/glm-5.2 | Codex>
-Documentation route: <agy + Gemini 3.5 Flash (Medium) | none>
+Lead/Reviewer: <executors.yaml lead and reviewer IDs plus models>
+Task contract: <.oyakata/L-NNN_short_goal.yaml path and task statuses>
+Implementation route: <executor IDs plus models from executors.yaml>
+Documentation route: <executor ID plus model from executors.yaml | none>
 Routing evidence: <remaining quota and reset comparison>
 Review rounds: <count and final decision>
 Verification: <commands and results>
