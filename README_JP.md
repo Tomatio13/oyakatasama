@@ -21,7 +21,7 @@ Oyakata は、複雑なソフトウェア開発を設定可能な役割分担で
 
 [`executors.yaml`](./executors.yaml) は Lead、Reviewer、executor、コマンド、引数、モデル、quota provider、調査担当、selector 候補の唯一の定義です。このファイルを編集して、スキルが使うコマンドとモデルの組み合わせを変更します。
 
-既定では Codex を Lead と Reviewer、Grok・OpenCode・Antigravity を executor として定義します。アーキテクチャ、セキュリティ、受け入れ判断、最終承認は設定済み Lead が担います。`executors.yaml` に API キー、Cookie、トークン、パスワード、`.env` の値を書かないでください。
+既定では Codex を Lead と Reviewer、Grok・OpenCode・Antigravity を executor として定義します。Lead と Reviewer は委譲先ではなく、タスクの `target_files` を編集しません。アーキテクチャ、セキュリティ、受け入れ判断、最終承認は設定済み Lead が担います。`executors.yaml` に API キー、Cookie、トークン、パスワード、`.env` の値を書かないでください。
 
 ## 🚀 使い方
 
@@ -64,6 +64,10 @@ backlog:
       - executor: agy
         reason: ドキュメントタスク
         changed_by: lead
+    delegation:
+      approval: not_requested
+      approved_executor: null
+      approved_target_files: []
     target_files: [README.md]
     verification: git diff --check
 ```
@@ -76,16 +80,18 @@ backlog:
 2. 契約にはゴール、制約、分割済みタスク、編集可能ファイル、検証、状態、`executor` を記録します。
 3. executor は担当タスクを `pending` から `in_progress` に変更し、`target_files` だけを編集し、ローカル検証後に `completed` に変更します。
 4. `executor` には `executors.yaml` の executor または selector キーを指定します。
-5. selector の場合、Lead は `executors.yaml` の `quota_provider` ごとに公式 `codexbar` CLI を実行し、JSON の残量を比較します。
-6. CodexBar が利用不能、失敗、または不正な JSON を返した場合、Lead は理由を残し、その selector の `fallback_executor` を使います。
-7. 全タスク完了後、設定済み Reviewer が差分と検証を独立して確認します。指摘があれば同じゴール契約へ修正タスクを追加します。
-8. 承認できるのは設定済み Reviewer だけです。
+5. Lead は実装を担当せず、すべてのタスクは `delegable: true` の executor へ割り当てます。
+6. 外部 executor または CodexBar selector を実行する前に、Lead はプロジェクト制約が外部送信を許可するか確認し、executor と `target_files` を明示した承認を取得します。
+7. 承認済み selector の場合、Lead は `executors.yaml` の `quota_provider` ごとに公式 `codexbar` CLI を実行し、JSON の残量を比較します。
+8. fallback executor が選ばれた場合も、実行前にその executor への新しい承認を取得します。
+9. 全タスク完了後、設定済み Reviewer が差分と検証を独立して確認します。指摘があれば同じゴール契約へ修正タスクを追加します。
+10. 承認できるのは設定済み Reviewer だけです。
 
 executor は自分の作業を承認したり、レビュー指摘を完了扱いにしたりできません。
 
 ## 📊 振り分け規則
 
-selector は、各候補のすべての残量ウィンドウ中で最小の残量を使います。残量が最大の候補を優先し、最大値との差が5ポイント以内ならリセット時刻が早い候補を優先します。なお同じ場合は selector の `tie_breaker` を使います。CLI または残量結果が利用できない場合は `fallback_executor` を使います。
+承認済み selector は、各候補で設定した `quota_windows` だけを使います。`safe_remaining` が最大の候補を優先し、最大値との差が5ポイント以内ならリセット時刻が早い候補を優先します。なお同じ場合は selector の `tie_breaker` を使います。CLI または残量結果が利用できない場合は `fallback_executor` を選び、実行前に承認を取得します。サンドボックスのログ、ソケット、権限エラーではタスクを pending のままにし、別 provider へ自動で切り替えません。
 
 ## 📁 ファイル
 

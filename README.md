@@ -21,7 +21,7 @@ Oyakata is a configurable workflow for non-trivial software work. Its name evoke
 
 [`executors.yaml`](./executors.yaml) is the only place that defines the Lead, Reviewer, executors, commands, arguments, models, quota-provider mappings, research routing, and quota-selection candidates. Edit it to choose the command and model combinations used by this skill.
 
-The default definitions use Codex as Lead and Reviewer, with Grok, OpenCode, and Antigravity as executors. Keep architecture, security, acceptance, and final approval in the configured Lead session. Do not store API keys, cookies, tokens, passwords, or `.env` values in `executors.yaml`.
+The default definitions use Codex as Lead and Reviewer, with Grok, OpenCode, and Antigravity as executors. The Lead and Reviewer are not delegable and never edit task `target_files`. Keep architecture, security, acceptance, and final approval in the configured Lead session. Do not store API keys, cookies, tokens, passwords, or `.env` values in `executors.yaml`.
 
 ## 🚀 Use
 
@@ -64,6 +64,10 @@ backlog:
       - executor: agy
         reason: Documentation task
         changed_by: lead
+    delegation:
+      approval: not_requested
+      approved_executor: null
+      approved_target_files: []
     target_files: [README.md]
     verification: git diff --check
 ```
@@ -72,20 +76,22 @@ Use an executor or selector key defined in `executors.yaml`.
 
 ## 🔁 Execution loop
 
-1. Codex creates one contract per goal: `.oyakata/L-NNN_short_goal.yaml`.
+1. The Lead creates one contract per goal: `.oyakata/L-NNN_short_goal.yaml`.
 2. The contract records the goal, constraints, bounded tasks, exact editable files, verification, task status, and `executor`.
 3. Each executor changes only its assigned task from `pending` to `in_progress`, edits only `target_files`, verifies locally, then marks it `completed`.
 4. `executor` must name an `executors.yaml` executor or selector key.
-5. For a selector, the Lead runs the official `codexbar` CLI with the relevant `quota_provider` values from `executors.yaml` and compares their JSON results.
-6. If CodexBar is unavailable, fails, or returns invalid JSON, the Lead records the reason and uses that selector's configured `fallback_executor`.
-7. After all assigned tasks are done, the configured Reviewer independently reviews the diff and runs verification. Review remediation becomes a new task in the same goal contract.
-8. The configured Reviewer alone approves the result.
+5. The Lead never implements a task. Every task must use an executor with `delegable: true`.
+6. Before an external executor or CodexBar selector runs, the Lead confirms that project constraints permit external transmission and obtains approval for the exact executor and `target_files`.
+7. For an approved selector, the Lead runs the official `codexbar` CLI with the relevant `quota_provider` values from `executors.yaml` and compares their JSON results.
+8. If a fallback executor is selected, the Lead obtains new approval for that executor before invoking it.
+9. After all assigned tasks are done, the configured Reviewer independently reviews the diff and runs verification. Review remediation becomes a new task in the same goal contract.
+10. The configured Reviewer alone approves the result.
 
 Executors cannot approve their own work or close review findings.
 
 ## 📊 Routing rule
 
-For any selector, use the smallest remaining percentage among all applicable quota windows. Prefer the larger value. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, use the selector's `tie_breaker`. If the CLI or quota result is unusable, use the selector's `fallback_executor`.
+For any approved selector, use only each candidate's configured `quota_windows`. Prefer the larger `safe_remaining`. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, use the selector's `tie_breaker`. If the CLI or quota result is unusable, select its `fallback_executor`, then obtain approval before invoking it. Sandbox log, socket, or permission failures leave the task pending; they do not trigger an automatic provider change.
 
 ## 📁 Files
 
