@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Oyakata executor definitions and the goal-contract template."""
+"""Validate Oyakatasama executor definitions and goal contracts."""
 
 from pathlib import Path
 import re
@@ -28,12 +28,97 @@ def require_executor(name: object, executors: dict, field: str) -> None:
         fail(f"{field} must reference an executor ID")
 
 
+def validate_task(task: object, executors: dict, selectors: dict, path: Path) -> None:
+    if not isinstance(task, dict):
+        fail(f"{path} each backlog task must be a mapping")
+
+    for field in ("id", "title", "status", "verification"):
+        if not isinstance(task.get(field), str) or not task[field]:
+            fail(f"{path} backlog task requires {field}")
+
+    if task["status"] not in {"pending", "in_progress", "completed"}:
+        fail(f"{path} backlog task status is invalid")
+
+    target_files = task.get("target_files")
+    if not isinstance(target_files, list) or not target_files:
+        fail(f"{path} backlog task target_files must be a non-empty list")
+    if not all(isinstance(file_path, str) and file_path for file_path in target_files):
+        fail(f"{path} backlog task target_files must contain strings")
+
+    executor = task.get("executor")
+    if executor not in executors and executor not in selectors:
+        fail(f"{path} backlog task executor must reference an executor or selector")
+    if executor in executors and not executors[executor]["delegable"]:
+        fail(f"{path} backlog task executor must be delegable")
+
+    history = task.get("executor_history")
+    if not isinstance(history, list) or not history:
+        fail(f"{path} backlog task executor_history must be a non-empty list")
+    for entry in history:
+        if not isinstance(entry, dict):
+            fail(f"{path} backlog task executor_history entries must be mappings")
+        for field in ("executor", "reason", "changed_by"):
+            if not isinstance(entry.get(field), str) or not entry[field]:
+                fail(f"{path} backlog task executor_history requires {field}")
+
+    delegation = task.get("delegation")
+    if not isinstance(delegation, dict):
+        fail(f"{path} backlog task requires delegation")
+    if delegation.get("approval") not in {"not_requested", "approved"}:
+        fail(f"{path} task delegation approval must be not_requested or approved")
+    files = delegation.get("approved_target_files")
+    if not isinstance(files, list) or not all(isinstance(file_path, str) for file_path in files):
+        fail(f"{path} task delegation approved_target_files must be a string list")
+    approved_executor = delegation.get("approved_executor")
+    if delegation["approval"] == "not_requested":
+        if approved_executor is not None or files:
+            fail(f"{path} unapproved delegation must not declare executor or files")
+    elif approved_executor not in executors:
+        fail(f"{path} approved delegation must reference an executor")
+    elif approved_executor != executor:
+        fail(f"{path} approved delegation executor must match task executor")
+    elif files != target_files:
+        fail(f"{path} approved delegation files must match task target_files")
+
+
+def validate_contract(path: Path, executors: dict, selectors: dict) -> None:
+    contract = load_yaml(path)
+    project = contract.get("project")
+    if not isinstance(project, dict):
+        fail(f"{path} project must be a mapping")
+    for field in ("id", "goal", "constraints", "success_criteria"):
+        if field not in project:
+            fail(f"{path} project requires {field}")
+    if not isinstance(project["id"], str) or not project["id"]:
+        fail(f"{path} project.id must be a string")
+    if not isinstance(project["goal"], str) or not project["goal"]:
+        fail(f"{path} project.goal must be a string")
+    for field in ("constraints", "success_criteria"):
+        values = project.get(field)
+        if not isinstance(values, list) or not values or not all(isinstance(item, str) and item for item in values):
+            fail(f"{path} project.{field} must be a non-empty string list")
+
+    if path.stem.startswith("L-"):
+        file_id = path.stem.split("_", 1)[0]
+        if project["id"] != file_id:
+            fail(f"{path} project.id must match the file prefix")
+
+    backlog = contract.get("backlog")
+    if not isinstance(backlog, list) or not backlog:
+        fail(f"{path} backlog must be a non-empty list")
+    for task in backlog:
+        validate_task(task, executors, selectors, path)
+
+    learnings = contract.get("learnings")
+    if not isinstance(learnings, list):
+        fail(f"{path} learnings must be a list")
+
+
 def main() -> None:
-    if len(sys.argv) != 3:
-        raise SystemExit("Usage: validate_executors.py <executors.yaml> <todo-template.yaml>")
+    if len(sys.argv) < 2:
+        raise SystemExit("Usage: validate_executors.py <executors.yaml> [<goal-contract.yaml> ...]")
 
     config = load_yaml(Path(sys.argv[1]))
-    template = load_yaml(Path(sys.argv[2]))
     executors = config.get("executors")
     if not isinstance(executors, dict) or not executors:
         fail("executors must be a non-empty mapping")
@@ -101,35 +186,8 @@ def main() -> None:
         if not executors[fallback_executor]["delegable"]:
             fail(f"selector {name}.fallback_executor must be delegable")
 
-    backlog = template.get("backlog")
-    if not isinstance(backlog, list):
-        fail("template backlog must be a list")
-    for task in backlog:
-        if not isinstance(task, dict):
-            fail("each template task must be a mapping")
-        executor = task.get("executor")
-        if executor not in executors and executor not in selectors:
-            fail("each template task executor must reference an executor or selector")
-        if executor in executors and not executors[executor]["delegable"]:
-            fail("template task executor must be delegable")
-        delegation = task.get("delegation")
-        if not isinstance(delegation, dict):
-            fail("each template task requires delegation")
-        if delegation.get("approval") not in {"not_requested", "approved"}:
-            fail("task delegation approval must be not_requested or approved")
-        files = delegation.get("approved_target_files")
-        if not isinstance(files, list) or not all(isinstance(path, str) for path in files):
-            fail("task delegation approved_target_files must be a string list")
-        approved_executor = delegation.get("approved_executor")
-        if delegation["approval"] == "not_requested":
-            if approved_executor is not None or files:
-                fail("unapproved delegation must not declare executor or files")
-        elif approved_executor not in executors:
-            fail("approved delegation must reference an executor")
-        elif approved_executor != executor:
-            fail("approved delegation executor must match task executor")
-        elif files != task.get("target_files"):
-            fail("approved delegation files must match task target_files")
+    for path in map(Path, sys.argv[2:]):
+        validate_contract(path, executors, selectors)
 
     print("Executor configuration is valid.")
 

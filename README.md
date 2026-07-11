@@ -1,7 +1,7 @@
-<h1 align="center">Oyakata</h1>
+<h1 align="center">Oyakatasama</h1>
 
 <p align="center">
-  <img src="assets/oyakata-crest.png" width="260" alt="Oyakata heraldic crest with a samurai helmet and banners" />
+  <img src="assets/oyakatasama-crest.jpg" width="260" alt="Oyakatasama heraldic crest with a samurai helmet and banners" />
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Contracts-YAML-cb171e?style=flat-square" alt="YAML contracts" />
 </p>
 
-Oyakata is a configurable workflow for non-trivial software work. Its name evokes an **Oyakata-sama**—a feudal lord in Japan's warrior society—not a modern construction foreman. The Lead plans and reviews; every goal has an independent local task contract; individual tasks retain their assigned executor; CodexBar quota data can select an implementation executor.
+Oyakatasama is a configurable workflow for non-trivial software work. Its name evokes **Oyakatasama** (specifically inspired by the Sengoku-period warlord Sanada Masayuki)—a feudal lord in Japan's warrior society—not a modern construction foreman. The Lead plans and reviews; every goal has an independent local task contract; individual tasks retain their assigned executor; CodexBar quota data can select an implementation executor.
 
 ## ⚙️ Executor definitions
 
@@ -25,10 +25,10 @@ The default definitions use Codex as Lead and Reviewer, with Grok, OpenCode, and
 
 ## 🚀 Use
 
-Start Codex in the target Git repository and request Oyakata explicitly:
+Start Codex in the target Git repository and request Oyakatasama explicitly:
 
 ```text
-$oyakata
+$oyakatasama
 
 Implement user registration with duplicate-email protection and tests.
 Update the README to match the implemented behavior.
@@ -36,7 +36,7 @@ Update the README to match the implemented behavior.
 
 ## 🔧 CodexBar CLI setup
 
-Install the official CodexBar CLI yourself before using a `selection` task. Oyakata never downloads, installs, updates, or configures it.
+Install the official CodexBar CLI yourself before using a `selection` task. Oyakatasama never downloads, installs, updates, or configures it, and it only reads quota when a new goal contract or remediation task introduces a selector-backed decision.
 
 1. Download the matching Linux or macOS CLI archive from the [CodexBar releases](https://github.com/steipete/CodexBar/releases).
 2. Extract `CodexBarCLI` and its `codexbar` symlink into a user-managed directory such as `$HOME/.local/bin`, then add that directory to `PATH`.
@@ -46,15 +46,17 @@ Install the official CodexBar CLI yourself before using a `selection` task. Oyak
 command -v codexbar
 codexbar --version
 codexbar usage --provider <quota_provider> --format json --pretty --no-color
-python3 <skill-dir>/scripts/validate_executors.py <skill-dir>/executors.yaml <skill-dir>/references/.todo.yaml
+python3 <skill-dir>/scripts/validate_executors.py <skill-dir>/executors.yaml
 ```
+
+After the goal contract exists, rerun the validator with `.oyakatasama/L-001_auth_refactor.yaml` or the current `L-NNN_*.yaml` file as the second argument.
 
 The official CLI supports `--provider` and JSON output. Keep its provider credentials and configuration under your own control.
 
 ## 🗂️ Minimal goal contract
 
 ```yaml
-# .oyakata/L-001_auth_refactor.yaml
+# .oyakatasama/L-001_auth_refactor.yaml
 backlog:
   - id: T001
     title: Update authentication documentation
@@ -76,7 +78,7 @@ Use an executor or selector key defined in `executors.yaml`.
 
 ## 🔁 Execution loop
 
-1. The Lead creates one contract per goal: `.oyakata/L-NNN_short_goal.yaml`.
+1. The Lead creates one contract per goal: `.oyakatasama/L-NNN_short_goal.yaml`.
 2. The contract records the goal, constraints, bounded tasks, exact editable files, verification, task status, and `executor`.
 3. Each executor changes only its assigned task from `pending` to `in_progress`, edits only `target_files`, verifies locally, then marks it `completed`.
 4. `executor` must name an `executors.yaml` executor or selector key.
@@ -89,9 +91,31 @@ Use an executor or selector key defined in `executors.yaml`.
 
 Executors cannot approve their own work or close review findings.
 
+## 🧭 Stop points and next action
+
+Oyakatasama should not end a run with only a status line. At every stopping point, return:
+
+1. the current position
+2. a concise completion or blocker summary
+3. the next action as options, a recommendation, and a copy-paste prompt
+
+Use this after:
+
+- task completion
+- review completion
+- verification failure
+- quota-routing failure
+- external delegation approval conflicts
+
+Before ending a run, the skill also checks whether any pending or in-progress task remains, whether a remediation or retry is needed, and whether a natural next goal should be proposed.
+
+If there are still pending tasks or the goal naturally continues, propose the next task or stage instead of stopping silently.
+
+When the user comes back later to resume the same goal, Oyakatasama first reads the active contract and reports the current position, what is already done, what is still pending or blocked, and the next concrete action.
+
 ## 📊 Routing rule
 
-For any approved selector, use only each candidate's configured `quota_windows`. Prefer the larger `safe_remaining`. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, use the selector's `tie_breaker`. If the CLI or quota result is unusable, select its `fallback_executor`, then obtain approval before invoking it. Sandbox log, socket, or permission failures leave the task pending; they do not trigger an automatic provider change.
+For any approved selector, use only each candidate's configured `quota_windows`. Prefer the larger `safe_remaining`. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, use the selector's `tie_breaker`. Read quota only when creating a new selector-backed goal contract or remediation task; do not refresh it for later tasks in the same contract. If the CLI or quota result is unusable, select its `fallback_executor`, then obtain approval before invoking it. Sandbox log, socket, or permission failures leave the task pending; they do not trigger an automatic provider change.
 
 ## 📁 Files
 
@@ -99,9 +123,9 @@ For any approved selector, use only each candidate's configured `quota_windows`.
 - `executors.yaml` — user-editable executor commands and models
 - `README.md` — this overview
 - `README_JP.md` — Japanese overview
-- `assets/oyakata-crest.png` — Oyakata-sama-inspired heraldic logo
+- `assets/oyakatasama-crest.jpg` — Oyakatasama-inspired heraldic logo
 - `references/.todo.yaml` — template copied to each goal contract
-- `scripts/validate_executors.py` — executor and template validator
+- `scripts/validate_executors.py` — executor and goal-contract validator
 
 ## 📄 License
 

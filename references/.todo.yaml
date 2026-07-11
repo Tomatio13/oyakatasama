@@ -1,11 +1,11 @@
 # ==============================================================================
 # 📄 ゴール単位コンテキストアンカー
-# コピー先: .oyakata/L-NNN_short_goal.yaml
+# コピー先: .oyakatasama/L-NNN_short_goal.yaml
 # ==============================================================================
 project:
   id: "L-001" # ファイル名の連番と一致させる
   goal: "${達成したい最終的なゴールを記述。例: ローカル認証ロジックの実装と単体テストの全通}"
-  
+
   # AIへの行動縛り（機密漏洩や無駄なハルシネーションを防止）
   constraints:
     - "完全ローカル完結。外部APIの呼び出しや外部サーバーへのデータ送信は一切禁止"
@@ -42,9 +42,10 @@ backlog:
   - id: "T002"
     title: "${タスク2のタイトル}"
     status: "pending"
-    executor: "grok" # executors.yaml の executors または selection のキー
+    # 実装系タスクの既定値は selection キー。CodexBar照会後にLeadが具体的なexecutorへ解決する
+    executor: "quota_selected"
     executor_history:
-      - executor: "grok"
+      - executor: "quota_selected"
         reason: "${Leadが選んだ理由}"
         changed_by: "lead"
     delegation:

@@ -1,4 +1,4 @@
-# User-editable runtime definitions for Oyakata.
+# User-editable runtime definitions for Oyakatasama.
 # Change commands, arguments, and models here; SKILL.md must not duplicate them.
 # Never put API keys, cookies, tokens, passwords, or .env values in this file.
 lead:
@@ -24,15 +24,10 @@ executors:
     quota_provider: grok
     quota_windows: [primary]
     args:
-      - --single
+      - -p
       - "{prompt}"
-      - --model
-      - "{model}"
-      - --cwd
-      - "{repo}"
       - --permission-mode
-      - acceptEdits
-      - --check
+      - bypassPermissions
 
   opencode:
     command: opencode
@@ -47,10 +42,7 @@ executors:
       - run
       - --model
       - "{model}"
-      - --agent
-      - build
-      - --dir
-      - "{repo}"
+      - --auto
       - "{prompt}"
 
   agy:
@@ -61,11 +53,8 @@ executors:
     requires_unsandboxed_runtime: true
     args:
       - --print
-      - --model
-      - "{model}"
-      - --mode
-      - accept-edits
       - "{prompt}"
+      - --dangerously-skip-permissions
 
 research:
   web_executor: agy
