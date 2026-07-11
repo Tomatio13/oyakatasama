@@ -31,6 +31,10 @@ backlog:
       - executor: "agy"
         reason: "${Leadが選んだ理由}"
         changed_by: "lead"
+    delegation:
+      approval: "not_requested" # not_requested / approved
+      approved_executor: null
+      approved_target_files: []
     target_files:
       - "${編集するファイルパス1}"
     verification: "${検証用ローカルコマンド、または確認手順}"
@@ -43,6 +47,10 @@ backlog:
       - executor: "grok"
         reason: "${Leadが選んだ理由}"
         changed_by: "lead"
+    delegation:
+      approval: "not_requested" # not_requested / approved
+      approved_executor: null
+      approved_target_files: []
     target_files:
       - "${編集するファイルパス2}"
     verification: "${検証用ローカルコマンド、または確認手順}"
