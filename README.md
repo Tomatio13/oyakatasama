@@ -1,18 +1,29 @@
-# Oyakata
+<h1 align="center">Oyakata</h1>
 
-Oyakata is a Codex-centered workflow for non-trivial software work. Codex plans and reviews; the implementation executor is chosen from live CodexBar quota data; Antigravity handles web research and bounded documentation tasks; Grok handles X research.
+<p align="center">
+  <img src="assets/oyakata-crest.png" width="260" alt="Oyakata heraldic crest with a samurai helmet and banners" />
+</p>
 
-## Role map
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="README_JP.md">日本語</a>
+</p>
 
-- **Lead / Reviewer:** Codex with `gpt-5.6-medium`
-- **Implementation:** `grok` with `grok-4.5`, or `opencode` with `zai-coding-plan/glm-5.2`
-- **Documentation:** `agy` with `Gemini 3.5 Flash (Medium)`
-- **Web research:** `agy`
-- **X research:** `grok`
+<p align="center">
+  <img src="https://img.shields.io/badge/Lead-Codex-412991?style=flat-square" alt="Configurable Lead" />
+  <img src="https://img.shields.io/badge/Routing-CodexBar-1f6feb?style=flat-square" alt="CodexBar routing" />
+  <img src="https://img.shields.io/badge/Contracts-YAML-cb171e?style=flat-square" alt="YAML contracts" />
+</p>
 
-Codex retains architecture, security, acceptance, and final-approval decisions.
+Oyakata is a configurable workflow for non-trivial software work. Its name evokes an **Oyakata-sama**—a feudal lord in Japan's warrior society—not a modern construction foreman. The Lead plans and reviews; every goal has an independent local task contract; individual tasks retain their assigned executor; CodexBar quota data can select an implementation executor.
 
-## Use
+## ⚙️ Executor definitions
+
+[`executors.yaml`](./executors.yaml) is the only place that defines the Lead, Reviewer, executors, commands, arguments, models, quota-provider mappings, research routing, and quota-selection candidates. Edit it to choose the command and model combinations used by this skill.
+
+The default definitions use Codex as Lead and Reviewer, with Grok, OpenCode, and Antigravity as executors. Keep architecture, security, acceptance, and final approval in the configured Lead session. Do not store API keys, cookies, tokens, passwords, or `.env` values in `executors.yaml`.
+
+## 🚀 Use
 
 Start Codex in the target Git repository and request Oyakata explicitly:
 
@@ -23,28 +34,69 @@ Implement user registration with duplicate-email protection and tests.
 Update the README to match the implemented behavior.
 ```
 
-## Execution loop
+## 🔧 CodexBar CLI setup
 
-1. Codex creates a shared task ledger in `TODO.md`. If an unrelated `TODO.md` already exists, it uses `.oyakata/TODO.md`.
-2. Codex records the goal, non-goals, bounded tasks, acceptance checks, and escalation conditions.
-3. For every implementation delegation, Codex runs `~/Workspace/CodexBar/Scripts/codexbar-fast.sh usage --pretty`.
-4. Codex compares the safe remaining quota and reset time for the `grok` and `zai` providers, then routes the task to `grok` or `opencode`.
-5. The executor completes only its assigned task IDs, runs their checks, and updates its task checkboxes and execution notes.
-6. After all assigned tasks are done, Codex independently reviews the diff and runs verification.
-7. If review finds issues, Codex writes remediation task IDs into the same ledger, refreshes quota data, and delegates the fixes again.
-8. Codex alone approves the result and closes the task ledger.
+Install the official CodexBar CLI yourself before using a `selection` task. Oyakata never downloads, installs, updates, or configures it.
+
+1. Download the matching Linux or macOS CLI archive from the [CodexBar releases](https://github.com/steipete/CodexBar/releases).
+2. Extract `CodexBarCLI` and its `codexbar` symlink into a user-managed directory such as `$HOME/.local/bin`, then add that directory to `PATH`.
+3. Confirm that the intended binary is selected and that the required providers are configured.
+
+```bash
+command -v codexbar
+codexbar --version
+codexbar usage --provider <quota_provider> --format json --pretty --no-color
+python3 <skill-dir>/scripts/validate_executors.py <skill-dir>/executors.yaml <skill-dir>/references/.todo.yaml
+```
+
+The official CLI supports `--provider` and JSON output. Keep its provider credentials and configuration under your own control.
+
+## 🗂️ Minimal goal contract
+
+```yaml
+# .oyakata/L-001_auth_refactor.yaml
+backlog:
+  - id: T001
+    title: Update authentication documentation
+    status: pending
+    executor: agy
+    executor_history:
+      - executor: agy
+        reason: Documentation task
+        changed_by: lead
+    target_files: [README.md]
+    verification: git diff --check
+```
+
+Use an executor or selector key defined in `executors.yaml`.
+
+## 🔁 Execution loop
+
+1. Codex creates one contract per goal: `.oyakata/L-NNN_short_goal.yaml`.
+2. The contract records the goal, constraints, bounded tasks, exact editable files, verification, task status, and `executor`.
+3. Each executor changes only its assigned task from `pending` to `in_progress`, edits only `target_files`, verifies locally, then marks it `completed`.
+4. `executor` must name an `executors.yaml` executor or selector key.
+5. For a selector, the Lead runs the official `codexbar` CLI with the relevant `quota_provider` values from `executors.yaml` and compares their JSON results.
+6. If CodexBar is unavailable, fails, or returns invalid JSON, the Lead records the reason and uses that selector's configured `fallback_executor`.
+7. After all assigned tasks are done, the configured Reviewer independently reviews the diff and runs verification. Review remediation becomes a new task in the same goal contract.
+8. The configured Reviewer alone approves the result.
 
 Executors cannot approve their own work or close review findings.
 
-## Routing rule
+## 📊 Routing rule
 
-For each provider, use the smallest remaining percentage among all applicable quota windows. Prefer the larger value. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, prefer Grok. If neither quota result is usable, Codex keeps the work instead of guessing.
+For any selector, use the smallest remaining percentage among all applicable quota windows. Prefer the larger value. When the difference is within five percentage points, prefer the earlier reset. If the result is still tied, use the selector's `tie_breaker`. If the CLI or quota result is unusable, use the selector's `fallback_executor`.
 
-## Files
+## 📁 Files
 
 - `SKILL.md` — the complete workflow and command templates
+- `executors.yaml` — user-editable executor commands and models
 - `README.md` — this overview
+- `README_JP.md` — Japanese overview
+- `assets/oyakata-crest.png` — Oyakata-sama-inspired heraldic logo
+- `references/.todo.yaml` — template copied to each goal contract
+- `scripts/validate_executors.py` — executor and template validator
 
-## License
+## 📄 License
 
 MIT

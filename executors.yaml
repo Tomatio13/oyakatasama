@@ -1,0 +1,67 @@
+# User-editable runtime definitions for Oyakata.
+# Change commands, arguments, and models here; SKILL.md must not duplicate them.
+# Never put API keys, cookies, tokens, passwords, or .env values in this file.
+lead:
+  executor: codex
+
+reviewer:
+  executor: codex
+
+executors:
+  codex:
+    command: current_codex_session
+    model: gpt-5.6-medium
+
+  grok:
+    command: grok
+    model: grok-4.5
+    quota_provider: grok
+    args:
+      - --single
+      - "{prompt}"
+      - --model
+      - "{model}"
+      - --cwd
+      - "{repo}"
+      - --permission-mode
+      - acceptEdits
+      - --check
+
+  opencode:
+    command: opencode
+    model: zai-coding-plan/glm-5.2
+    quota_provider: zai
+    args:
+      - run
+      - --model
+      - "{model}"
+      - --agent
+      - build
+      - --dir
+      - "{repo}"
+      - "{prompt}"
+
+  agy:
+    command: agy
+    model: Gemini 3.5 Flash (Medium)
+    args:
+      - --print
+      - --model
+      - "{model}"
+      - --mode
+      - accept-edits
+      - "{prompt}"
+
+research:
+  web_executor: agy
+  x_executor: grok
+
+# Add, rename, or remove selectors freely. Tasks reference the selector key.
+selection:
+  quota_selected:
+    # These are only the default candidates; use any executor IDs with quota_provider.
+    candidates:
+      - grok
+      - opencode
+    tie_breaker: grok
+    fallback_executor: opencode
