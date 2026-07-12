@@ -21,8 +21,8 @@ This file defines how delegated executors interact with goal contracts. The Lead
 
 Executors may edit only:
 
-- their assigned task's `status`;
-- `learnings`, by appending one concise project-specific line;
+- their assigned task's `status`, using `scripts/todo_cli.py set-status`;
+- `learnings`, by appending one concise project-specific line with `scripts/todo_cli.py add-learning`;
 - the task `target_files` they were assigned to change.
 
 Executors must not edit:
@@ -32,6 +32,7 @@ Executors must not edit:
 - `executor`;
 - `executor_history`;
 - `delegation`;
+- contract YAML directly for status or learning updates;
 - `references/.todo.yaml`.
 
 ## Why Codex must enforce this
@@ -51,10 +52,12 @@ When delegating, include contract-update limits explicitly. The prompt should te
 
 - read the active contract first;
 - work only on the assigned task IDs and `target_files`;
-- set the assigned task `in_progress` before editing;
+- set the assigned task `in_progress` with `python3 <skill-dir>/scripts/todo_cli.py set-status <active-contract-path> <task-id> in_progress` before editing;
 - run the task verification;
-- set the assigned task `completed` only after verification succeeds;
+- set the assigned task `completed` with `python3 <skill-dir>/scripts/todo_cli.py set-status <active-contract-path> <task-id> completed` only after verification succeeds;
+- append any project-specific lesson only with `python3 <skill-dir>/scripts/todo_cli.py add-learning <active-contract-path> "<entry>"`;
 - leave failures as `in_progress` and report the exact blocker;
+- do not update status or learnings by editing YAML directly;
 - do not edit `executor`, `executor_history`, or `delegation`;
 - do not change contract structure;
 - do not touch `references/.todo.yaml`;

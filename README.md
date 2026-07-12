@@ -136,9 +136,9 @@ For any approved selector, use only each candidate's configured `quota_windows`.
 Use the local helper when you want small, deterministic contract updates instead of opening the whole YAML in an LLM context. Keep the detailed operating rules in `references/contract_cli.md`; this README only summarizes the available commands.
 
 ```bash
-python3 scripts/todo_cli.py create "Implement duplicate-email-safe registration"
-python3 scripts/todo_cli.py list-active
-python3 scripts/todo_cli.py list-active --format text
+python3 scripts/todo_cli.py create "Implement duplicate-email-safe registration" --repo /path/to/repo
+python3 scripts/todo_cli.py list-active --repo /path/to/repo
+python3 scripts/todo_cli.py list-active --repo /path/to/repo --format text
 python3 scripts/todo_cli.py summary .oyakatasama/L-001_auth_refactor.yaml
 python3 scripts/todo_cli.py set-status .oyakatasama/L-001_auth_refactor.yaml T001 in_progress
 python3 scripts/todo_cli.py assign .oyakatasama/L-001_auth_refactor.yaml T001 grok "Quota winner"
@@ -162,6 +162,9 @@ Current scope:
 
 The active goal contract is treated as machine-managed YAML. The template under `references/.todo.yaml` keeps the rich inline guidance; copied contracts may be normalized when the CLI writes them back.
 
+Default paths for `create`, `list-active`, and `validate` resolve from the skill directory, not from the current working directory. This avoids accidental mismatch when the skill is invoked from another repository.
+For contract discovery and creation, prefer passing `--repo /abs/path/to/repo` so `.oyakatasama` resolves to the target repository even when the script is launched from the skill directory.
+
 Guardrail:
 
 - write commands reject `references/.todo.yaml`; update only active contracts under `.oyakatasama/`.
@@ -180,6 +183,8 @@ External executors such as `agy`, `grok`, and `opencode` should not be expected 
 - recording `assign` and `approve` changes;
 - constraining the delegated prompt;
 - validating the returned contract state.
+
+For delegated contract updates, status changes and learning entries should go through `scripts/todo_cli.py` rather than direct YAML editing.
 
 When the current goal is not explicit, use `list-active` before writing the next recommendation. This keeps Next Action tied to one chosen contract instead of an ambiguous repository-wide status.
 

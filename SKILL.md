@@ -106,7 +106,7 @@ Before delegating to any executor, you MUST read `<skill-dir>/references/executo
 1. Build the executor prompt from the active contract's absolute path, the assigned task IDs, each task's `target_files`, and exactly this instruction block:
 
 ```text
-Read <active-contract-path>. Assigned task IDs: <IDs>. Work only on those tasks and their target_files. Set each task in_progress before editing. Run its verification. Set completed only after success. Leave failures in_progress and report the exact blocker. Do not review.
+Read <active-contract-path>. Assigned task IDs: <IDs>. Work only on those tasks and their target_files. When contract discovery or creation is needed, use `--repo <repo>` or `--goal-dir <repo>/.oyakatasama` explicitly; do not rely on the script caller's working directory. Use `python3 <skill-dir>/scripts/todo_cli.py set-status <active-contract-path> <task-id> in_progress` before editing. Run the task verification. Use `python3 <skill-dir>/scripts/todo_cli.py set-status <active-contract-path> <task-id> completed` only after verification succeeds. If you need to append one concise lesson, use `python3 <skill-dir>/scripts/todo_cli.py add-learning <active-contract-path> "<entry>"`. Do not update status or learnings by editing YAML directly. Leave failures in_progress and report the exact blocker. Do not review.
 ```
 
 Add the executor-update restrictions from `references/executor_contract_update_policy.md` to the delegated prompt. Never assume an external executor will infer those restrictions from repository files alone.
@@ -120,7 +120,7 @@ Add the executor-update restrictions from `references/executor_contract_update_p
 1. **Fix the context:** read the active contract, confirm `project.goal` and `project.constraints`, set the assigned task from `pending` to `in_progress`, and save it.
 1. **Respect the edit boundary:** edit only that task's `target_files`, plus the contract fields each role may edit (Hard rules). Do not add unrequested code or files.
 1. **Verify objectively:** run the task's `verification` locally after implementation. Do not start another task until it passes.
-1. **Synchronize:** on success set the task `completed`; if a project-specific bug pattern or specification trap was found, append it as one concise line to `learnings`. On failure keep the task `in_progress`, record no completion, and report the exact command and failure to the Lead.
+1. **Synchronize:** use `scripts/todo_cli.py` for deterministic contract updates. On success set the task `completed` with `set-status`; if a project-specific bug pattern or specification trap was found, append it as one concise line to `learnings` with `add-learning`. On failure keep the task `in_progress`, record no completion, and report the exact command and failure to the Lead.
 
 ### Step 6 — Review in the Reviewer session
 

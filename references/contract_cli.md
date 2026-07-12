@@ -31,8 +31,8 @@ This policy applies to active goal contracts under `.oyakatasama/L-*.yaml`.
 Use the CLI for deterministic updates:
 
 ```bash
-python3 <skill-dir>/scripts/todo_cli.py create "Implement duplicate-email-safe registration"
-python3 <skill-dir>/scripts/todo_cli.py list-active
+python3 <skill-dir>/scripts/todo_cli.py create "Implement duplicate-email-safe registration" --repo <repo>
+python3 <skill-dir>/scripts/todo_cli.py list-active --repo <repo>
 python3 <skill-dir>/scripts/todo_cli.py summary .oyakatasama/L-001_auth_refactor.yaml
 python3 <skill-dir>/scripts/todo_cli.py set-status .oyakatasama/L-001_auth_refactor.yaml T001 in_progress
 python3 <skill-dir>/scripts/todo_cli.py assign .oyakatasama/L-001_auth_refactor.yaml T001 grok "Quota winner"
@@ -59,7 +59,7 @@ Do not use the CLI as a replacement for contract design. Use direct editing for:
 
 ### Resume existing goal
 
-1. Run `list-active`.
+1. Run `list-active --repo <repo>`.
 2. Choose the goal from `recommended_contract` when available; otherwise inspect `invalid_contracts` or completed contracts explicitly.
 3. Run `summary` for the chosen contract.
 4. Identify pending or `in_progress` tasks.
@@ -92,5 +92,6 @@ When the invalid contract appears to be historical or pre-schema, read `referenc
 ## Guardrails
 
 - Never write to `references/.todo.yaml`.
+- When invoking the script from outside the target repository, pass `--repo <repo>` or `--goal-dir <repo>/.oyakatasama` explicitly.
 - Do not use write commands against a template or a legacy contract that has not been reviewed for schema fit.
 - If `validate` fails on an older contract, treat it as a migration case rather than forcing field updates blindly.

@@ -25,6 +25,12 @@ from todo_lib import (
 from validate_executors import main as validate_main
 
 
+SKILL_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_TEMPLATE_PATH = SKILL_DIR / "references" / ".todo.yaml"
+DEFAULT_EXECUTORS_PATH = SKILL_DIR / "executors.yaml"
+DEFAULT_REPO_PATH = Path.cwd()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage Oyakatasama goal contracts.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -34,12 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     create_parser = subparsers.add_parser("create", help="Create a new active contract from the template.")
     create_parser.add_argument("goal", help="Concrete goal text written into project.goal")
-    create_parser.add_argument("--template", type=Path, default=Path("references/.todo.yaml"), help="Template path")
-    create_parser.add_argument("--goal-dir", type=Path, default=Path(".oyakatasama"), help="Active contract directory")
+    create_parser.add_argument("--template", type=Path, default=DEFAULT_TEMPLATE_PATH, help="Template path")
+    create_parser.add_argument("--goal-dir", type=Path, default=None, help="Active contract directory")
+    create_parser.add_argument("--repo", type=Path, default=DEFAULT_REPO_PATH, help="Repository root used to resolve .oyakatasama when --goal-dir is omitted")
 
     list_parser = subparsers.add_parser("list-active", help="List active, invalid, and completed contracts.")
-    list_parser.add_argument("--goal-dir", type=Path, default=Path(".oyakatasama"), help="Active contract directory")
-    list_parser.add_argument("--executors", type=Path, default=Path("executors.yaml"), help="Path to executors.yaml")
+    list_parser.add_argument("--goal-dir", type=Path, default=None, help="Active contract directory")
+    list_parser.add_argument("--repo", type=Path, default=DEFAULT_REPO_PATH, help="Repository root used to resolve .oyakatasama when --goal-dir is omitted")
+    list_parser.add_argument("--executors", type=Path, default=DEFAULT_EXECUTORS_PATH, help="Path to executors.yaml")
     list_parser.add_argument("--format", choices=("json", "text"), default="json", help="Output format")
 
     status_parser = subparsers.add_parser("set-status", help="Update one task status.")
@@ -64,8 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     learning_parser.add_argument("entry", help="One concise learning line")
 
     validate_parser = subparsers.add_parser("validate", help="Validate executors and a goal contract.")
-    validate_parser.add_argument("executors", type=Path, help="Path to executors.yaml")
-    validate_parser.add_argument("contract", type=Path, nargs="?", help="Optional goal contract path")
+    validate_parser.add_argument("paths", type=Path, nargs="*", help="Optional [executors.yaml] [contract.yaml]")
 
     return parser
 
@@ -80,6 +87,12 @@ def command_create(template_path: Path, goal_dir: Path, goal: str) -> int:
     result = create_contract_from_template(template_path, goal_dir, goal)
     print(json.dumps({"ok": True, **result}, ensure_ascii=False, indent=2))
     return 0
+
+
+def resolve_goal_dir(goal_dir: Path | None, repo: Path) -> Path:
+    if goal_dir is not None:
+        return goal_dir
+    return repo / ".oyakatasama"
 
 
 def format_list_active_text(result: dict) -> str:
@@ -178,6 +191,19 @@ def command_validate(executors_path: Path, contract_path: Path | None) -> int:
     return 0
 
 
+def resolve_validate_paths(paths: list[Path]) -> tuple[Path, Path | None]:
+    if not paths:
+        return DEFAULT_EXECUTORS_PATH, None
+    if len(paths) == 1:
+        path = paths[0]
+        if path.name in {"executors.yaml", "executors.yml"}:
+            return path, None
+        return DEFAULT_EXECUTORS_PATH, path
+    if len(paths) == 2:
+        return paths[0], paths[1]
+    raise TodoError("validate accepts at most two paths: [executors.yaml] [contract.yaml]")
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -186,9 +212,9 @@ def main() -> int:
         if args.command == "summary":
             return command_summary(args.contract)
         if args.command == "create":
-            return command_create(args.template, args.goal_dir, args.goal)
+            return command_create(args.template, resolve_goal_dir(args.goal_dir, args.repo), args.goal)
         if args.command == "list-active":
-            return command_list_active(args.goal_dir, args.executors, args.format)
+            return command_list_active(resolve_goal_dir(args.goal_dir, args.repo), args.executors, args.format)
         if args.command == "set-status":
             return command_set_status(args.contract, args.task_id, args.status)
         if args.command == "approve":
@@ -198,7 +224,8 @@ def main() -> int:
         if args.command == "add-learning":
             return command_add_learning(args.contract, args.entry)
         if args.command == "validate":
-            return command_validate(args.executors, args.contract)
+            executors_path, contract_path = resolve_validate_paths(args.paths)
+            return command_validate(executors_path, contract_path)
     except TodoError as error:
         print(f"todo_cli error: {error}", file=sys.stderr)
         return 1

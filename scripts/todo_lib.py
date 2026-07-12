@@ -252,6 +252,14 @@ def recommended_contract_reason(contract: dict[str, Any] | None) -> str | None:
 
 
 def classify_validation_issue(error: str | None) -> dict[str, str | bool | None]:
+    if error is None:
+        return {
+            "rule": None,
+            "category": None,
+            "auto_migration_candidate": False,
+            "summary": "valid",
+        }
+
     if not error:
         return {
             "rule": "unknown",
