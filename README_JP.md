@@ -136,9 +136,9 @@ Oyakatasama は、終了時にステータスだけを返して終わるべき�
 契約 YAML 全体を毎回 LLM に読ませず、小さく決定的に更新したい場合はローカル CLI を使います。詳細な運用規約は `references/contract_cli.md` に置き、この README では利用可能コマンドだけを要約します。
 
 ```bash
-python3 scripts/todo_cli.py create "Implement duplicate-email-safe registration"
-python3 scripts/todo_cli.py list-active
-python3 scripts/todo_cli.py list-active --format text
+python3 scripts/todo_cli.py create "Implement duplicate-email-safe registration" --repo /path/to/repo
+python3 scripts/todo_cli.py list-active --repo /path/to/repo
+python3 scripts/todo_cli.py list-active --repo /path/to/repo --format text
 python3 scripts/todo_cli.py summary .oyakatasama/L-001_auth_refactor.yaml
 python3 scripts/todo_cli.py set-status .oyakatasama/L-001_auth_refactor.yaml T001 in_progress
 python3 scripts/todo_cli.py assign .oyakatasama/L-001_auth_refactor.yaml T001 grok "Quota winner"
@@ -162,6 +162,8 @@ python3 scripts/todo_cli.py validate executors.yaml .oyakatasama/L-001_auth_refa
 
 active contract は機械更新される YAML として扱います。詳しい説明コメントは `references/.todo.yaml` テンプレート側に残し、CLI で書き戻した契約は整形が正規化されます。
 
+`create`、`list-active`、`validate` の既定 path は現在の作業ディレクトリではなく skill directory 基準で解決します。これにより、別 repository から skill を呼んでも `executors.yaml` や template の取り違えを避けます。contract 探索と作成では `--repo /abs/path/to/repo` を渡し、対象 repository の `.oyakatasama` を明示する運用を推奨します。
+
 ガード:
 
 - 書き込み系コマンドは `references/.todo.yaml` を拒否します。更新対象は `.oyakatasama/` 配下の active contract だけです。
@@ -180,6 +182,8 @@ active contract は機械更新される YAML として扱います。詳しい�
 - `assign` と `approve` の記録
 - 委譲 prompt の制約注入
 - 戻ってきた contract 状態の validate
+
+委譲先が contract を更新する場合、status 変更と learning 追記は YAML 直編集ではなく `scripts/todo_cli.py` を通す前提です。
 
 現在のゴールが明示されていないときは、次の推奨を書く前に `list-active` を使って再開対象を 1 つ選びます。これで repository 全体の曖昧な状態ではなく、選択済み contract に対して Next Action を返せます。
 

@@ -116,8 +116,8 @@ class TodoCliTest(unittest.TestCase):
             "Implement authentication flow",
             "--template",
             str(template_path),
-            "--goal-dir",
-            str(goal_dir),
+            "--repo",
+            str(repo_dir),
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -128,6 +128,7 @@ class TodoCliTest(unittest.TestCase):
         created_text = created_path.read_text()
         self.assertIn('id: L-001', created_text)
         self.assertIn('goal: Implement authentication flow', created_text)
+        self.assertEqual(created_path.parent, goal_dir)
 
     def test_set_status_updates_contract(self) -> None:
         contract = self.make_contract()
@@ -191,6 +192,22 @@ class TodoCliTest(unittest.TestCase):
         self.assertEqual(payload["invalid_contracts"][0]["validation"]["category"], "legacy_schema")
         self.assertFalse(payload["invalid_contracts"][0]["validation"]["auto_migration_candidate"])
 
+    def test_list_active_resolves_goal_dir_from_repo(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        repo_dir = Path(temp_dir.name)
+        goal_dir = repo_dir / ".oyakatasama"
+        goal_dir.mkdir(parents=True)
+        active_contract = goal_dir / "L-001_active_goal.yaml"
+        active_contract.write_text(CONTRACT_TEXT)
+
+        result = self.run_cli("list-active", "--repo", str(repo_dir), "--executors", str(EXECUTORS))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload["active_contracts"]), 1)
+        self.assertEqual(payload["recommended_contract"]["project"]["id"], "L-001")
+
     def test_list_active_text_format(self) -> None:
         temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(temp_dir.cleanup)
@@ -226,6 +243,14 @@ class TodoCliTest(unittest.TestCase):
         contract = self.make_contract()
 
         result = self.run_cli("validate", str(EXECUTORS), str(contract))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Executor configuration is valid.", result.stdout)
+
+    def test_validate_uses_default_executors_path(self) -> None:
+        contract = self.make_contract()
+
+        result = self.run_cli("validate", str(contract))
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Executor configuration is valid.", result.stdout)
