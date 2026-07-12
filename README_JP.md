@@ -125,7 +125,63 @@ Oyakatasama は、終了時にステータスだけを返して終わるべき�
 - `README_JP.md` — 日本語版の概要
 - `assets/oyakatasama-crest.jpg` — 戦国武将の真田昌幸（お館様）をイメージした紋章ロゴ
 - `references/.todo.yaml` — ゴール契約へコピーするテンプレート
+- `references/contract_cli.md` — Contract CLI と直接編集の使い分け
+- `references/executor_contract_update_policy.md` — contract 更新における executor 制約
+- `references/legacy_contract_migration.md` — 古い invalid contract を移行すべきか判断する基準
+- `scripts/todo_cli.py` — 契約の要約表示と task 状態更新
 - `scripts/validate_executors.py` — executor とテンプレートの検証
+
+## 🧰 Contract CLI
+
+契約 YAML 全体を毎回 LLM に読ませず、小さく決定的に更新したい場合はローカル CLI を使います。詳細な運用規約は `references/contract_cli.md` に置き、この README では利用可能コマンドだけを要約します。
+
+```bash
+python3 scripts/todo_cli.py create "Implement duplicate-email-safe registration"
+python3 scripts/todo_cli.py list-active
+python3 scripts/todo_cli.py list-active --format text
+python3 scripts/todo_cli.py summary .oyakatasama/L-001_auth_refactor.yaml
+python3 scripts/todo_cli.py set-status .oyakatasama/L-001_auth_refactor.yaml T001 in_progress
+python3 scripts/todo_cli.py assign .oyakatasama/L-001_auth_refactor.yaml T001 grok "Quota winner"
+python3 scripts/todo_cli.py approve .oyakatasama/L-001_auth_refactor.yaml T001 grok README.md
+python3 scripts/todo_cli.py add-learning .oyakatasama/L-001_auth_refactor.yaml "Fallback executor required fresh approval"
+python3 scripts/todo_cli.py validate executors.yaml .oyakatasama/L-001_auth_refactor.yaml
+```
+
+現時点の対応範囲:
+
+- `create` は `references/.todo.yaml` を次の `.oyakatasama/L-*.yaml` へ複製し、`project.id` と `project.goal` を埋めます。
+- `list-active` は active / invalid / completed の状態と `recommended_contract` を返します。
+- `list-active --format text` は再開判断向けの簡易要約を表示します。
+- invalid 項目には Next Action 判断用の category / rule / auto-migration 候補情報を含みます。
+- `summary` は project、task 件数、task メタデータをコンパクトな JSON で出力します。
+- `set-status` は 1 task の状態を更新して契約へ書き戻します。
+- `assign` は 1 task の executor を更新し、`executor_history` を追記します。
+- `approve` は 1 task の delegation 承認内容を正確に記録します。
+- `add-learning` は `learnings` に 1 行追記します。
+- `validate` は `scripts/validate_executors.py` を再利用します。
+
+active contract は機械更新される YAML として扱います。詳しい説明コメントは `references/.todo.yaml` テンプレート側に残し、CLI で書き戻した契約は整形が正規化されます。
+
+ガード:
+
+- 書き込み系コマンドは `references/.todo.yaml` を拒否します。更新対象は `.oyakatasama/` 配下の active contract だけです。
+
+## 🧭 Contract 運用の参照先
+
+詳細な運用ポリシーは、この README ではなく reference を見てください。
+
+- `references/contract_cli.md` — 直接編集と決定的 CLI 更新のユースケース分離
+- `references/executor_contract_update_policy.md` — Lead と委譲 executor の責務分離
+- `references/legacy_contract_migration.md` — invalid / 履歴 contract の移行判断基準
+
+`agy`、`grok`、`opencode` のような外部 executor が、repository 内のファイルだけから contract 管理ポリシー全体を自然に推論する前提は置きません。Lead としての Codex が次を担保します。
+
+- route の選定
+- `assign` と `approve` の記録
+- 委譲 prompt の制約注入
+- 戻ってきた contract 状態の validate
+
+現在のゴールが明示されていないときは、次の推奨を書く前に `list-active` を使って再開対象を 1 つ選びます。これで repository 全体の曖昧な状態ではなく、選択済み contract に対して Next Action を返せます。
 
 ## 📄 ライセンス
 
