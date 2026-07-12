@@ -163,18 +163,53 @@ If the chosen contract is invalid and appears historical or pre-schema, you MUST
 
 At every stopping point — goal complete, task blocked, approval needed, or session end — the reply MUST end with the Completion report followed by the Next Action Protocol, in that order. Never end with a bare status, and never end without a copy-paste prompt.
 
+Write the report in the user's language. Put the decision-relevant information first: status, the immediate blocker or completed outcome, and the exact next user action. Keep routes, models, quota comparisons, and full verification commands in `Details`; do not make the user infer the blocker from those fields. Use short bullets, not dense semicolon-separated lines.
+
 ### Completion report
 
 ```text
-Result: <completed or blocked>
-Lead/Reviewer: <executors.yaml lead and reviewer IDs plus models>
-Task contract: <.oyakatasama/L-NNN_short_goal.yaml path and task statuses>
-Implementation route: <executor IDs plus models from executors.yaml>
-Documentation route: <executor ID plus model from executors.yaml | none>
-Routing evidence: <remaining quota and reset comparison | none>
-Review rounds: <count and final decision>
-Verification: <commands and results>
-Unresolved: <none or concise list>
+Completion report
+Status: <COMPLETED or BLOCKED>
+Outcome or blocker:
+- <what completed, or the one immediate reason work cannot continue>
+Required action:
+- <exact user action needed now, or none>
+Progress:
+- Contract: <path>
+- Tasks: <completed count/total; pending or in-progress task IDs, if any>
+Checks:
+- <passed verification summary, or not run>
+Review: <not started | round count and final decision>
+Details:
+- Lead/Reviewer: <executor IDs plus models>
+- Routes: <implementation and documentation executor IDs plus models, or unresolved candidates>
+- Routing evidence: <quota and reset comparison, or none>
+- Unresolved: <remaining items, or none>
+```
+
+For a blocked run, `Outcome or blocker` MUST name the incomplete pipeline gate (for example, `Step 3: external delegation approval is not recorded`). `Required action` MUST state the exact approval or decision and its task/file scope. Do not describe unresolved routes as if they were selected.
+
+Example — blocked before routing:
+
+```text
+Completion report
+Status: BLOCKED
+Outcome or blocker:
+- Step 3: External delegation approval is not recorded, so T001-T003 cannot be sent.
+Required action:
+- Approve sending the contract and each task's target_files to grok or opencode for T001-T003.
+- Approve the CodexBar quota lookup for grok and opencode; the result will select the executor.
+Progress:
+- Contract: .oyakatasama/L-010_ui_smoke_verification_for_existing.yaml
+- Tasks: 0/3 completed; pending T001, T002, T003.
+Checks:
+- Executor configuration, contract validation, and active-contract lookup passed.
+Review: not started.
+Details:
+- Lead/Reviewer: codex gpt-5.6-medium / codex gpt-5.6-medium
+- Routes: unresolved between grok grok-4.5 and opencode zai-coding-plan/glm-5.2.
+- Routing evidence: none; quota lookup has not run.
+- Unresolved: Step 3 approval and Step 4 quota lookup.
 ```
 
 ### Next Action Protocol

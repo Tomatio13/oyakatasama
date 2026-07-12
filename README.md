@@ -106,6 +106,8 @@ Oyakatasama should not end a run with only a status line. At every stopping poin
 2. a concise completion or blocker summary
 3. the next action as options, a recommendation, and a copy-paste prompt
 
+For blocked runs, the summary begins with the immediate blocker and the exact action needed to unblock it. Contract paths and task progress follow next; model names, route comparisons, quota evidence, and full verification commands stay in a final details section. This makes approval and routing blockers actionable without losing the audit trail.
+
 Use this after:
 
 - task completion
