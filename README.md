@@ -125,7 +125,63 @@ For any approved selector, use only each candidate's configured `quota_windows`.
 - `README_JP.md` — Japanese overview
 - `assets/oyakatasama-crest.jpg` — Oyakatasama-inspired heraldic logo
 - `references/.todo.yaml` — template copied to each goal contract
+- `references/contract_cli.md` — when to use the contract CLI versus direct editing
+- `references/executor_contract_update_policy.md` — Lead-enforced executor limits for contract updates
+- `references/legacy_contract_migration.md` — how to decide whether an invalid old contract should be migrated
+- `scripts/todo_cli.py` — compact contract summary and task-status updater
 - `scripts/validate_executors.py` — executor and goal-contract validator
+
+## 🧰 Contract CLI
+
+Use the local helper when you want small, deterministic contract updates instead of opening the whole YAML in an LLM context. Keep the detailed operating rules in `references/contract_cli.md`; this README only summarizes the available commands.
+
+```bash
+python3 scripts/todo_cli.py create "Implement duplicate-email-safe registration"
+python3 scripts/todo_cli.py list-active
+python3 scripts/todo_cli.py list-active --format text
+python3 scripts/todo_cli.py summary .oyakatasama/L-001_auth_refactor.yaml
+python3 scripts/todo_cli.py set-status .oyakatasama/L-001_auth_refactor.yaml T001 in_progress
+python3 scripts/todo_cli.py assign .oyakatasama/L-001_auth_refactor.yaml T001 grok "Quota winner"
+python3 scripts/todo_cli.py approve .oyakatasama/L-001_auth_refactor.yaml T001 grok README.md
+python3 scripts/todo_cli.py add-learning .oyakatasama/L-001_auth_refactor.yaml "Fallback executor required fresh approval"
+python3 scripts/todo_cli.py validate executors.yaml .oyakatasama/L-001_auth_refactor.yaml
+```
+
+Current scope:
+
+- `create` copies `references/.todo.yaml` into the next `.oyakatasama/L-*.yaml` contract and fills `project.id` plus `project.goal`.
+- `list-active` returns active, invalid, and completed contract state plus `recommended_contract`.
+- `list-active --format text` prints a compact resume-oriented summary for humans.
+- invalid entries include validation category, rule, and auto-migration hint for Next Action decisions.
+- `summary` prints compact JSON for the project, task counts, and task metadata.
+- `set-status` updates one task status and writes the contract back.
+- `assign` updates one task executor and appends `executor_history`.
+- `approve` records exact delegation approval for one task.
+- `add-learning` appends one concise entry to `learnings`.
+- `validate` reuses `scripts/validate_executors.py`.
+
+The active goal contract is treated as machine-managed YAML. The template under `references/.todo.yaml` keeps the rich inline guidance; copied contracts may be normalized when the CLI writes them back.
+
+Guardrail:
+
+- write commands reject `references/.todo.yaml`; update only active contracts under `.oyakatasama/`.
+
+## 🧭 Contract policy references
+
+Use the reference files, not this README, as the detailed operating policy:
+
+- `references/contract_cli.md` — use-case split between direct editing and deterministic CLI updates
+- `references/executor_contract_update_policy.md` — responsibility split between the Lead and delegated executors
+- `references/legacy_contract_migration.md` — decision rules for invalid or historical contracts
+
+External executors such as `agy`, `grok`, and `opencode` should not be expected to infer the full contract-management policy from repository files alone. Codex, acting as the Lead, is responsible for:
+
+- choosing the route;
+- recording `assign` and `approve` changes;
+- constraining the delegated prompt;
+- validating the returned contract state.
+
+When the current goal is not explicit, use `list-active` before writing the next recommendation. This keeps Next Action tied to one chosen contract instead of an ambiguous repository-wide status.
 
 ## 📄 License
 

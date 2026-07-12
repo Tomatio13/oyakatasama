@@ -37,7 +37,7 @@ Work through the steps strictly in order. Each step ends with a GATE; do not sta
 
 Steps 3, 4, and 7 apply only when there is an external executor, a `selection` task, or a changes-requested review, respectively. Every other step is unconditional.
 
-**Resume rule:** when the user returns to an existing goal, do not restart. Read the active contract, identify task statuses, the last completed or blocked step, and any pending verification, review, delegation, or routing decision. Enter the pipeline at the earliest step whose gate is not yet met, and open your reply with a compact resume summary: current position, what is done, what is blocked or pending, and the next concrete action. If the goal is already complete, go directly to Step 8.
+**Resume rule:** when the user returns to existing work, do not restart blindly. First identify which goal contract should be resumed. Use `list-active` when more than one contract may exist, or when the current goal is not explicit. Prefer its `recommended_contract`; if it is null, inspect `invalid_contracts` or completed contracts before deciding the next action. After choosing the goal contract, identify task statuses, the last completed or blocked step, and any pending verification, review, delegation, or routing decision. Enter the pipeline at the earliest step whose gate is not yet met, and open your reply with a compact resume summary: current position, what is done, what is blocked or pending, and the next concrete action. If the goal is already complete, go directly to Step 8.
 
 ### Step 0 — Load runtime config
 
@@ -53,6 +53,8 @@ python3 <skill-dir>/scripts/validate_executors.py <skill-dir>/executors.yaml
 ### Step 1 — Select or create the goal contract
 
 Exactly one contract under project-root `.oyakatasama/` is active per goal.
+
+Before using any contract helper CLI command, you MUST read `<skill-dir>/references/contract_cli.md` ([references/contract_cli.md](references/contract_cli.md)) and follow its use-case split between direct editing and deterministic CLI updates exactly.
 
 - **New user-visible goal:** create `.oyakatasama/` if needed and copy `<skill-dir>/references/.todo.yaml` to `.oyakatasama/L-<next-number>_<short-goal>.yaml`. `<next-number>` is the greatest existing `L-NNN_*.yaml` number plus one, zero-padded to at least three digits (`001` when none exists). `<short-goal>` is two to five lowercase ASCII words joined by underscores, for example `auth_refactor` or `payment_api`. Never overwrite or reuse an existing contract. After the copy, validate the active contract path, not the template path.
 - **Follow-up to an existing goal:** reuse only that goal's contract. Identify its exact path before delegating; never create a second contract for the same goal.
@@ -96,6 +98,8 @@ executor_history:
 
 For each task or task batch, in this order:
 
+Before delegating to any executor, you MUST read `<skill-dir>/references/executor_contract_update_policy.md` ([references/executor_contract_update_policy.md](references/executor_contract_update_policy.md)) and apply its responsibility split and prompt constraints. The Lead, not the executor, is responsible for enforcing that policy.
+
 1. Confirm the task's `executor` is delegable and, if external, exactly matches its approved `delegation` record. Refuse a non-delegable executor.
 1. If `requires_unsandboxed_runtime` is true, request the already-approved least-privilege runtime escalation before invocation; do not first run it in a sandbox that cannot write its logs or bind required loopback sockets.
 1. Invoke the configured `command` with expanded `args`, non-interactively so the Lead can capture and review the result. Run in an isolated branch or worktree for non-trivial changes when the active harness supports it. Do not grant bypass permissions by default. Preserve repository instructions and least-privilege permissions.
@@ -104,6 +108,8 @@ For each task or task batch, in this order:
 ```text
 Read <active-contract-path>. Assigned task IDs: <IDs>. Work only on those tasks and their target_files. Set each task in_progress before editing. Run its verification. Set completed only after success. Leave failures in_progress and report the exact blocker. Do not review.
 ```
+
+Add the executor-update restrictions from `references/executor_contract_update_policy.md` to the delegated prompt. Never assume an external executor will infer those restrictions from repository files alone.
 
 5. Tell the executor to return only: files changed, verification results, and unresolved issues.
 1. If the executor cannot start because of sandbox filesystem, log-path, socket, or permission errors: leave the task `pending`, append the exact error to `executor_history`, and stop. Do not automatically retry, switch providers, or send the project to another external executor.
@@ -149,6 +155,9 @@ Produce the two Output contract blocks below. Before ending, confirm none of the
 1. remediation, blockers, or failed verifications needing a concrete follow-up;
 1. a completed goal that naturally leads to the next task, goal, or documentation update;
 1. an external-delegation or quota-routing failure needing a precise retry path.
+
+When the current goal is not explicit, or when several contracts may compete for attention, determine the goal first from `list-active` before writing the Next Action Protocol.
+If the chosen contract is invalid and appears historical or pre-schema, you MUST read `<skill-dir>/references/legacy_contract_migration.md` ([references/legacy_contract_migration.md](references/legacy_contract_migration.md)) before recommending migration, repair, or replacement.
 
 ## Output contract
 
