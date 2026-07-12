@@ -8,6 +8,23 @@ import sys
 import yaml
 
 
+# Supported runtime placeholders. {skill_dir} expands to the absolute path of the
+# directory that contains executors.yaml (the skill directory); the others are
+# per-invocation values expanded by the Lead at runtime.
+ARG_PLACEHOLDERS = {"{repo}", "{model}", "{prompt}", "{skill_dir}"}
+COMMAND_PLACEHOLDERS = {"{skill_dir}"}
+
+
+def expand_skill_dir(value: str, skill_dir: Path) -> str:
+    """Expand the {skill_dir} placeholder to the absolute skill directory path.
+
+    This makes path-like values resolvable at runtime independent of the caller's
+    working directory. ``skill_dir`` is the resolved directory containing
+    executors.yaml.
+    """
+    return value.replace("{skill_dir}", str(skill_dir))
+
+
 def fail(message: str) -> None:
     print(f"Invalid executor configuration: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -118,7 +135,9 @@ def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit("Usage: validate_executors.py <executors.yaml> [<goal-contract.yaml> ...]")
 
-    config = load_yaml(Path(sys.argv[1]))
+    config_path = Path(sys.argv[1])
+    config = load_yaml(config_path)
+    config_dir = config_path.resolve().parent
     executors = config.get("executors")
     if not isinstance(executors, dict) or not executors:
         fail("executors must be a non-empty mapping")
@@ -129,6 +148,21 @@ def main() -> None:
         for field in ("command", "model"):
             if not isinstance(definition.get(field), str) or not definition[field]:
                 fail(f"executor {name} requires {field}")
+        command = definition["command"]
+        if command != "current_codex_session":
+            command_placeholders = set(re.findall(r"\{[^}]+\}", command))
+            unsupported_command = command_placeholders - COMMAND_PLACEHOLDERS
+            if unsupported_command:
+                fail(
+                    f"executor {name} command has unsupported placeholder: "
+                    f"{sorted(unsupported_command)}"
+                )
+            expanded_command = expand_skill_dir(command, config_dir)
+            if "/" in expanded_command:
+                command_path = Path(expanded_command)
+                resolved = command_path if command_path.is_absolute() else config_dir / command_path
+                if not resolved.exists():
+                    fail(f"executor {name} command does not exist: {resolved}")
         if not isinstance(definition.get("delegable"), bool):
             fail(f"executor {name} requires boolean delegable")
         if definition.get("data_boundary") not in {"current_session", "external_service"}:
@@ -141,7 +175,7 @@ def main() -> None:
                 fail(f"executor {name} requires string args")
             for arg in args:
                 placeholders = re.findall(r"\{[^}]+\}", arg)
-                if any(item not in {"{repo}", "{model}", "{prompt}"} for item in placeholders):
+                if any(item not in ARG_PLACEHOLDERS for item in placeholders):
                     fail(f"executor {name} has an unsupported placeholder")
 
     for role in ("lead", "reviewer"):
