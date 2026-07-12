@@ -12,6 +12,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TODO_CLI = REPO_ROOT / "scripts" / "todo_cli.py"
 EXECUTORS = REPO_ROOT / "executors.yaml"
+VALIDATE_EXECUTORS = REPO_ROOT / "scripts" / "validate_executors.py"
+
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import validate_executors  # noqa: E402  (path added above)
 
 
 CONTRACT_TEXT = textwrap.dedent(
@@ -254,6 +258,148 @@ class TodoCliTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Executor configuration is valid.", result.stdout)
+
+    def test_validate_resolves_wrapper_independent_of_cwd(self) -> None:
+        contract = self.make_contract()
+
+        result = subprocess.run(
+            [sys.executable, str(TODO_CLI), "validate", str(EXECUTORS), str(contract)],
+            cwd=tempfile.gettempdir(),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Executor configuration is valid.", result.stdout)
+
+    # --- {skill_dir} runtime expansion (R2-01) ---
+
+    MINIMAL_EXECUTORS_TEMPLATE = textwrap.dedent(
+        """\
+        lead:
+          executor: local
+
+        reviewer:
+          executor: local
+
+        executors:
+          local:
+            command: current_codex_session
+            model: m
+            delegable: false
+            data_boundary: current_session
+            requires_unsandboxed_runtime: false
+          wrapper:
+            command: __COMMAND__
+            model: m
+            delegable: true
+            data_boundary: external_service
+            requires_unsandboxed_runtime: true
+            quota_provider: p
+            quota_windows: [primary]
+            args:
+              - "{prompt}"
+
+        research:
+          web_executor: wrapper
+          x_executor: wrapper
+
+        selection:
+          quota_selected:
+            candidates:
+              - wrapper
+            tie_breaker: wrapper
+            fallback_executor: wrapper
+        """
+    )
+
+    def make_skill_dir_executors(self, command_value: str) -> tuple[Path, Path]:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        skill_dir = Path(temp_dir.name)
+        executors_path = skill_dir / "executors.yaml"
+        executors_path.write_text(
+            self.MINIMAL_EXECUTORS_TEMPLATE.replace("__COMMAND__", command_value)
+        )
+        return skill_dir, executors_path
+
+    def run_validator(self, executors_path: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(VALIDATE_EXECUTORS), str(executors_path)],
+            cwd=str(cwd),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_expand_skill_dir_returns_absolute_cwd_independent_path(self) -> None:
+        expanded = validate_executors.expand_skill_dir(
+            "{skill_dir}/scripts/executor_quiet.sh", REPO_ROOT
+        )
+
+        self.assertEqual(expanded, f"{REPO_ROOT}/scripts/executor_quiet.sh")
+        self.assertNotIn("{skill_dir}", expanded)
+        self.assertTrue(Path(expanded).is_absolute(), expanded)
+        self.assertIn("{skill_dir}", validate_executors.ARG_PLACEHOLDERS)
+        self.assertIn("{skill_dir}", validate_executors.COMMAND_PLACEHOLDERS)
+
+    def test_real_executors_use_skill_dir_for_wrapper_commands(self) -> None:
+        import yaml
+
+        data = yaml.safe_load(EXECUTORS.read_text())
+        for executor_id in ("grok", "opencode", "agy"):
+            command = data["executors"][executor_id]["command"]
+            self.assertEqual(command, "{skill_dir}/scripts/executor_quiet.sh", executor_id)
+            expanded = validate_executors.expand_skill_dir(command, REPO_ROOT)
+            self.assertTrue(Path(expanded).is_absolute(), expanded)
+            self.assertTrue(Path(expanded).exists(), expanded)
+
+    def test_skill_dir_command_validates_from_foreign_cwd(self) -> None:
+        skill_dir, executors_path = self.make_skill_dir_executors(
+            '"{skill_dir}/scripts/executor_quiet.sh"'
+        )
+        (skill_dir / "scripts").mkdir()
+        (skill_dir / "scripts" / "executor_quiet.sh").write_text("#!/bin/sh\n")
+
+        result = self.run_validator(executors_path, cwd=Path(tempfile.gettempdir()))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Executor configuration is valid.", result.stdout)
+
+    def test_skill_dir_command_fails_deterministically_when_missing(self) -> None:
+        skill_dir, executors_path = self.make_skill_dir_executors(
+            '"{skill_dir}/scripts/missing.sh"'
+        )
+
+        result = self.run_validator(executors_path, cwd=Path(tempfile.gettempdir()))
+
+        expected_resolved = executors_path.resolve().parent / "scripts" / "missing.sh"
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("command does not exist", result.stderr)
+        self.assertIn(str(expected_resolved), result.stderr)
+
+    def test_bare_relative_command_still_resolves_against_config_dir(self) -> None:
+        skill_dir, executors_path = self.make_skill_dir_executors(
+            '"./scripts/executor_quiet.sh"'
+        )
+        (skill_dir / "scripts").mkdir()
+        (skill_dir / "scripts" / "executor_quiet.sh").write_text("#!/bin/sh\n")
+
+        result = self.run_validator(executors_path, cwd=Path(tempfile.gettempdir()))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Executor configuration is valid.", result.stdout)
+
+    def test_unsupported_command_placeholder_is_rejected(self) -> None:
+        _skill_dir, executors_path = self.make_skill_dir_executors(
+            '"{model}/scripts/executor_quiet.sh"'
+        )
+
+        result = self.run_validator(executors_path, cwd=Path(tempfile.gettempdir()))
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("command has unsupported placeholder", result.stderr)
 
     def test_approve_updates_delegation(self) -> None:
         contract = self.make_contract()

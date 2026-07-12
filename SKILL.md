@@ -13,7 +13,7 @@ Separate judgment, implementation, and documentation. The configured Lead contro
 
 - The configured Lead and Reviewer MUST NOT edit any task `target_files`, even for trivial one-file tasks. Architecture, security decisions, acceptance decisions, and final sign-off stay in the Lead session.
 - [executors.yaml](executors.yaml) in `<skill-dir>` is the only source of truth for the Lead, Reviewer, executor IDs, commands, args, models, quota-provider mappings, research routing, and selectors. Use only IDs defined under `executors` or `selection`. A task executor MUST have `delegable: true`.
-- Expand `{repo}`, `{model}`, and `{prompt}` in an executor's `args` before invoking its `command`. Never add unlisted flags or silently substitute a model.
+- Expand `{repo}`, `{model}`, and `{prompt}` in an executor's `args` before invoking its `command`. Expand `{skill_dir}` to the absolute path of the skill directory (the directory containing executors.yaml) in both `command` and `args`, so a path-like command such as `{skill_dir}/scripts/executor_quiet.sh` resolves the same way regardless of the caller's working directory. Never add unlisted flags, silently substitute a model, or leave a `{skill_dir}` command relative to the caller's cwd.
 - The active `.oyakatasama/L-NNN_<short-goal>.yaml` contract is the single source of truth for that goal's scope and progress. Executors may change only their assigned task's `status` and append to `learnings`. Only the Lead changes `executor`, `delegation`, and `executor_history`; `executor_history` is append-only.
 - A task becomes `completed` only after its `verification` passes locally (exit 0, or the stated manual check passes completely). Never weaken, skip, or replace a verification without the Lead's explicit task-contract update. Never accept an executor's self-report as verification.
 - Any executor with `data_boundary: external_service` requires the recorded approval of Step 3 before any invocation, including runtime checks and quota lookups.
@@ -102,7 +102,7 @@ Before delegating to any executor, you MUST read `<skill-dir>/references/executo
 
 1. Confirm the task's `executor` is delegable and, if external, exactly matches its approved `delegation` record. Refuse a non-delegable executor.
 1. If `requires_unsandboxed_runtime` is true, request the already-approved least-privilege runtime escalation before invocation; do not first run it in a sandbox that cannot write its logs or bind required loopback sockets.
-1. Invoke the configured `command` with expanded `args`, non-interactively so the Lead can capture and review the result. Run in an isolated branch or worktree for non-trivial changes when the active harness supports it. Do not grant bypass permissions by default. Preserve repository instructions and least-privilege permissions.
+1. Invoke the configured `command` — expanding `{skill_dir}` in it to the absolute skill directory so the resolved command is independent of the caller's working directory — with expanded `args`, non-interactively so the Lead can capture and review the result. Run in an isolated branch or worktree for non-trivial changes when the active harness supports it. Do not grant bypass permissions by default. Preserve repository instructions and least-privilege permissions.
 1. Build the executor prompt from the active contract's absolute path, the assigned task IDs, each task's `target_files`, and exactly this instruction block:
 
 ```text

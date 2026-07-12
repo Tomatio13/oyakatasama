@@ -16,7 +16,7 @@ executors:
     requires_unsandboxed_runtime: false
 
   grok:
-    command: grok
+    command: "{skill_dir}/scripts/executor_quiet.sh"
     model: grok-4.5
     delegable: true
     data_boundary: external_service
@@ -24,13 +24,14 @@ executors:
     quota_provider: grok
     quota_windows: [primary]
     args:
+      - grok
       - -p
       - "{prompt}"
       - --permission-mode
       - bypassPermissions
 
   opencode:
-    command: opencode
+    command: "{skill_dir}/scripts/executor_quiet.sh"
     model: zai-coding-plan/glm-5.2
     delegable: true
     data_boundary: external_service
@@ -39,6 +40,7 @@ executors:
     # z.ai secondary is Total Monthly Web Search, not coding-plan capacity.
     quota_windows: [primary]
     args:
+      - opencode
       - run
       - --model
       - "{model}"
@@ -46,12 +48,13 @@ executors:
       - "{prompt}"
 
   agy:
-    command: agy
+    command: "{skill_dir}/scripts/executor_quiet.sh"
     model: Gemini 3.5 Flash (Medium)
     delegable: true
     data_boundary: external_service
     requires_unsandboxed_runtime: true
     args:
+      - agy
       - --print
       - "{prompt}"
       - --dangerously-skip-permissions

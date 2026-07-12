@@ -23,6 +23,13 @@ Oyakatasama is a configurable workflow for non-trivial software work. Its name e
 
 The default definitions use Codex as Lead and Reviewer, with Grok, OpenCode, and Antigravity as executors. The Lead and Reviewer are not delegable and never edit task `target_files`. Keep architecture, security, acceptance, and final approval in the configured Lead session. Do not store API keys, cookies, tokens, passwords, or `.env` values in `executors.yaml`.
 
+The default external executors run through the quiet wrapper [`scripts/executor_quiet.sh`](./scripts/executor_quiet.sh) to ensure security and clean execution. This wrapper exhibits the following behaviors:
+
+* **Success-Log Deletion**: When an executor command runs successfully (exit code 0), all generated standard output and standard error log files are immediately and automatically deleted to avoid cluttering the filesystem.
+* **Failure-Log Permissions and Paths**: When an executor command fails (non-zero exit code), the wrapper retains both stdout and stderr log files, ensures they are restricted to `600` permissions (read/write by owner only, created using `umask 077` and explicitly verified via `chmod 600`), and prints the paths to these logs along with the exit code to stderr.
+* **TMPDIR Fallback**: Log directories are resolved using the environment variable `TMPDIR`. If `TMPDIR` is unset, empty, or points to a non-existent/unwritable directory, the wrapper falls back to `/tmp`. If `/tmp` is also unavailable or unwritable, it falls back to a private temporary directory created via `mktemp -d`.
+* **CWD-Independent Command Resolution**: To prevent command paths from breaking when executed from a different directory, `executors.yaml` uses the `{skill_dir}` placeholder (e.g., `{skill_dir}/scripts/executor_quiet.sh`), which the Lead expands to the absolute directory containing `executors.yaml` before invocation.
+
 ## 🚀 Use
 
 Start Codex in the target Git repository and request Oyakatasama explicitly:
