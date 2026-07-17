@@ -87,14 +87,16 @@ Use an executor or selector key defined in `executors.yaml`.
 
 1. The Lead creates one contract per goal: `.oyakatasama/L-NNN_short_goal.yaml`.
 2. The contract records the goal, constraints, bounded tasks, exact editable files, verification, task status, and `executor`.
-3. Each executor changes only its assigned task from `pending` to `in_progress`, edits only `target_files`, verifies locally, then marks it `completed`.
-4. `executor` must name an `executors.yaml` executor or selector key.
-5. The Lead never implements a task. Every task must use an executor with `delegable: true`.
-6. Before an external executor or CodexBar selector runs, the Lead confirms that project constraints permit external transmission and obtains approval for the exact executor and `target_files`.
-7. For an approved selector, the Lead runs the official `codexbar` CLI with the relevant `quota_provider` values from `executors.yaml` and compares their JSON results.
-8. If a fallback executor is selected, the Lead obtains new approval for that executor before invoking it.
-9. After all assigned tasks are done, the configured Reviewer independently reviews the diff and runs verification. Review remediation becomes a new task in the same goal contract.
-10. The configured Reviewer alone approves the result.
+3. `executor` must name an `executors.yaml` executor or selector key.
+4. The Lead never implements a task. Every task must use an executor with `delegable: true`.
+5. Before an external executor or CodexBar selector runs, the Lead confirms that project constraints permit external transmission and obtains approval for the exact executor and `target_files`.
+6. For an approved selector, the Lead runs the official `codexbar` CLI with the relevant `quota_provider` values from `executors.yaml` and compares their JSON results. If a fallback executor is selected, the Lead obtains new approval for that executor before invoking it.
+7. The Lead must not invoke the task executor command directly in the Lead session. Instead, for each delegated task batch, the Lead spawns exactly one direct-child **executor-runner** Subagent, passes the approved invocation package (executor ID, expanded command and args, model, task IDs, target files, active contract path, and constrained prompt), and waits for it to finish.
+8. The executor-runner Subagent (a workflow role, not an `executors.yaml` ID) runs the command non-interactively, monitors the process, and returns only: `exit_code`, `changed_files`, `executor_self_reported_verification`, and `unresolved_issues`. The runner must not edit the contract, routing, approvals, target files, or decide verification.
+9. Under the runner, the delegated executor changes its assigned task status from `pending` to `in_progress` before editing, edits only the assigned `target_files`, runs task verification, and updates its status to `completed` and appends optional `learnings` using `todo_cli.py`.
+10. After the runner returns, the Lead independently runs each task's `verification` locally. The Lead never accepts the executor's or runner's self-report as proof of completion.
+11. After all assigned tasks are verified, the configured Reviewer independently reviews the diff and runs verification. Review remediation becomes a new task in the same goal contract.
+12. The configured Reviewer alone approves the result.
 
 Executors cannot approve their own work or close review findings.
 
@@ -136,6 +138,7 @@ For any approved selector, use only each candidate's configured `quota_windows`.
 - `references/.todo.yaml` — template copied to each goal contract
 - `references/contract_cli.md` — when to use the contract CLI versus direct editing
 - `references/executor_contract_update_policy.md` — Lead-enforced executor limits for contract updates
+- `references/executor_runner.md` — Lead-enforced subagent launch and wait monitoring policy
 - `references/legacy_contract_migration.md` — how to decide whether an invalid old contract should be migrated
 - `scripts/todo_cli.py` — compact contract summary and task-status updater
 - `scripts/validate_executors.py` — executor and goal-contract validator
@@ -172,7 +175,7 @@ Current scope:
 The active goal contract is treated as machine-managed YAML. The template under `references/.todo.yaml` keeps the rich inline guidance; copied contracts may be normalized when the CLI writes them back.
 
 Default paths for `create`, `list-active`, and `validate` resolve from the skill directory, not from the current working directory. This avoids accidental mismatch when the skill is invoked from another repository.
-For contract discovery and creation, prefer passing `--repo /abs/path/to/repo` so `.oyakatasama` resolves to the target repository even when the script is launched from the skill directory.
+When contract discovery or creation is needed, use --repo /path/to/repo or --goal-dir /path/to/repo/.oyakatasama explicitly; do not rely on the script caller working directory.
 
 Guardrail:
 
@@ -184,6 +187,7 @@ Use the reference files, not this README, as the detailed operating policy:
 
 - `references/contract_cli.md` — use-case split between direct editing and deterministic CLI updates
 - `references/executor_contract_update_policy.md` — responsibility split between the Lead and delegated executors
+- `references/executor_runner.md` — responsibility split and wait boundary for the executor-runner Subagent
 - `references/legacy_contract_migration.md` — decision rules for invalid or historical contracts
 
 External executors such as `agy`, `grok`, and `opencode` should not be expected to infer the full contract-management policy from repository files alone. Codex, acting as the Lead, is responsible for:
