@@ -86,14 +86,14 @@ backlog:
 ## 🔁 実行フロー
 
 1. Lead はゴールごとに `.oyakatasama/L-NNN_short_goal.yaml` を作成します。
-2. 契約にはゴール、制約、分割済みタスク、編集可能ファイル、検証、状態、`executor` を記録します。
-3. executor は担当タスクを `pending` から `in_progress` に変更し、`target_files` だけを編集し、ローカル検証後に `completed` に変更します。
-4. `executor` には `executors.yaml` の executor または selector キーを指定します。
-5. Lead は実装を担当せず、すべてのタスクは `delegable: true` の executor へ割り当てます。
-6. 外部 executor または CodexBar selector を実行する前に、Lead はプロジェクト制約が外部送信を許可するか確認し、executor と `target_files` を明示した承認を取得します。
-7. 承認済み selector の場合、Lead は `executors.yaml` の `quota_provider` ごとに公式 `codexbar` CLI を実行し、JSON の残量を比較します。
-8. fallback executor が選ばれた場合も、実行前にその executor への新しい承認を取得します。
-9. 全タスク完了後、設定済み Reviewer が差分と検証を独立して確認します。指摘があれば同じゴール契約へ修正タスクを追加します。
+2. 契約にはゴール、制約、分割済みタスク、編集可能ファイル、検証、状態、および `executor` （`executors.yaml` で定義された executor または selector キー）を記録します。Lead は実装を担当せず、すべてのタスクは `delegable: true` の executor へ割り当てます。
+3. 外部 executor または CodexBar selector を実行する前に、Lead はプロジェクト制約が外部送信を許可するか確認し、executor と `target_files` を明示した承認を取得します。
+4. 承認済み selector の場合、Lead は `executors.yaml` の `quota_provider` ごとに公式 `codexbar` CLI を実行し、JSON の残量を比較します。fallback executor が選ばれた場合も、実行前にその executor への新しい承認を取得します。
+5. Lead は、Lead セッションで直接タスク executor コマンドを実行してはなりません。代わりに、委譲するタスクバッチごとに、直接の子となる **executor-runner** Subagent を起動し、承認済みの起動パッケージ（executor ID、展開されたコマンドと引数、モデル、タスクID、target_files、有効な契約パス、および制約付きプロンプト）を渡し、その runner が終了するまで**待機**します。
+6. executor-runner Subagent（ワークフロー上の役割であり、`executors.yaml` の ID ではありません）は、コマンドを非対話的に実行してプロセスを監視し、`exit_code`、`changed_files`、`executor_self_reported_verification`、および `unresolved_issues` のみを含む結果パッケージを Lead に返します。runner は契約、ルーティング、承認、または target_files を編集してはならず、最終的な検証判定や Reviewer の起動を行ってはなりません。
+7. runner の実行下で、委譲された executor は編集前に担当タスクの状態を `pending` から `in_progress` に変更し、割り当てられた `target_files` のみを編集し、タスク検証を実行して、`todo_cli.py` を使用して状態を `completed` に更新し、必要に応じて `learnings` を追記します。
+8. runner が復帰した後、Lead は各タスクの `verification` をローカルで独立して実行します。Lead は、executor または runner による自己申告の検証結果を完了の証明として受け入れてはなりません。
+9. 全タスクの検証が成功した後、設定済み Reviewer が差分と検証を独立して確認します。指摘があれば同じゴール契約へ修正タスクを追加します。
 10. 承認できるのは設定済み Reviewer だけです。
 
 executor は自分の作業を承認したり、レビュー指摘を完了扱いにしたりできません。
@@ -136,6 +136,7 @@ Oyakatasama は、終了時にステータスだけを返して終わるべき�
 - `references/.todo.yaml` — ゴール契約へコピーするテンプレート
 - `references/contract_cli.md` — Contract CLI と直接編集の使い分け
 - `references/executor_contract_update_policy.md` — contract 更新における executor 制約
+- `references/executor_runner.md` — Lead が強制する subagent 起動・待機監視ポリシー
 - `references/legacy_contract_migration.md` — 古い invalid contract を移行すべきか判断する基準
 - `scripts/todo_cli.py` — 契約の要約表示と task 状態更新
 - `scripts/validate_executors.py` — executor とテンプレートの検証
@@ -171,7 +172,8 @@ python3 scripts/todo_cli.py validate executors.yaml .oyakatasama/L-001_auth_refa
 
 active contract は機械更新される YAML として扱います。詳しい説明コメントは `references/.todo.yaml` テンプレート側に残し、CLI で書き戻した契約は整形が正規化されます。
 
-`create`、`list-active`、`validate` の既定 path は現在の作業ディレクトリではなく skill directory 基準で解決します。これにより、別 repository から skill を呼んでも `executors.yaml` や template の取り違えを避けます。contract 探索と作成では `--repo /abs/path/to/repo` を渡し、対象 repository の `.oyakatasama` を明示する運用を推奨します。
+`create`、`list-active`、`validate` の既定 path は現在の作業ディレクトリではなく skill directory 基準で解決します。これにより、別 repository から skill を呼んでも `executors.yaml` や template の取り違えを避けます。
+契約の探索または作成が必要な場合は、スクリプト呼び出し元の作業ディレクトリに依存せず、`--repo /path/to/repo` または `--goal-dir /path/to/repo/.oyakatasama` を明示的に指定してください。
 
 ガード:
 
@@ -183,6 +185,7 @@ active contract は機械更新される YAML として扱います。詳しい�
 
 - `references/contract_cli.md` — 直接編集と決定的 CLI 更新のユースケース分離
 - `references/executor_contract_update_policy.md` — Lead と委譲 executor の責務分離
+- `references/executor_runner.md` — executor-runner Subagent の責務分離と待機境界
 - `references/legacy_contract_migration.md` — invalid / 履歴 contract の移行判断基準
 
 `agy`、`grok`、`opencode` のような外部 executor が、repository 内のファイルだけから contract 管理ポリシー全体を自然に推論する前提は置きません。Lead としての Codex が次を担保します。

@@ -16,6 +16,7 @@ Separate judgment, implementation, and documentation. The configured Lead contro
 - Expand `{repo}`, `{model}`, and `{prompt}` in an executor's `args` before invoking its `command`. Expand `{skill_dir}` to the absolute path of the skill directory (the directory containing executors.yaml) in both `command` and `args`, so a path-like command such as `{skill_dir}/scripts/executor_quiet.sh` resolves the same way regardless of the caller's working directory. Never add unlisted flags, silently substitute a model, or leave a `{skill_dir}` command relative to the caller's cwd.
 - The active `.oyakatasama/L-NNN_<short-goal>.yaml` contract is the single source of truth for that goal's scope and progress. Executors may change only their assigned task's `status` and append to `learnings`. Only the Lead changes `executor`, `delegation`, and `executor_history`; `executor_history` is append-only.
 - A task becomes `completed` only after its `verification` passes locally (exit 0, or the stated manual check passes completely). Never weaken, skip, or replace a verification without the Lead's explicit task-contract update. Never accept an executor's self-report as verification.
+- The Lead MUST NOT invoke a task executor `command` directly. For every delegated task batch, spawn a direct-child **executor-runner** Subagent, wait for that runner to finish, then independently verify. The runner launches and monitors the approved executor only; it does not approve, re-route, edit `target_files`, decide verification, or review. See `references/executor_runner.md`.
 - Any executor with `data_boundary: external_service` requires the recorded approval of Step 3 before any invocation, including runtime checks and quota lookups.
 - Write user-facing prose in the user's language. Keep contract YAML keys, the executor prompt block, and report field labels exactly as written in this file.
 
@@ -98,28 +99,40 @@ executor_history:
 
 For each task or task batch, in this order:
 
-Before delegating to any executor, you MUST read `<skill-dir>/references/executor_contract_update_policy.md` ([references/executor_contract_update_policy.md](references/executor_contract_update_policy.md)) and apply its responsibility split and prompt constraints. The Lead, not the executor, is responsible for enforcing that policy.
+Before delegating to any executor, you MUST read `<skill-dir>/references/executor_contract_update_policy.md` ([references/executor_contract_update_policy.md](references/executor_contract_update_policy.md)) and `<skill-dir>/references/executor_runner.md` ([references/executor_runner.md](references/executor_runner.md)) and apply their responsibility split, wait boundary, and prompt constraints. The Lead, not the executor or the runner, is responsible for enforcing those policies.
 
 1. Confirm the task's `executor` is delegable and, if external, exactly matches its approved `delegation` record. Refuse a non-delegable executor.
 1. If `requires_unsandboxed_runtime` is true, request the already-approved least-privilege runtime escalation before invocation; do not first run it in a sandbox that cannot write its logs or bind required loopback sockets.
-1. Invoke the configured `command` — expanding `{skill_dir}` in it to the absolute skill directory so the resolved command is independent of the caller's working directory — with expanded `args`, non-interactively so the Lead can capture and review the result. Run in an isolated branch or worktree for non-trivial changes when the active harness supports it. Do not grant bypass permissions by default. Preserve repository instructions and least-privilege permissions.
 1. Build the executor prompt from the active contract's absolute path, the assigned task IDs, each task's `target_files`, and exactly this instruction block:
 
 ```text
 Read <active-contract-path>. Assigned task IDs: <IDs>. Work only on those tasks and their target_files. When contract discovery or creation is needed, use `--repo <repo>` or `--goal-dir <repo>/.oyakatasama` explicitly; do not rely on the script caller's working directory. Use `python3 <skill-dir>/scripts/todo_cli.py set-status <active-contract-path> <task-id> in_progress` before editing. Run the task verification. Use `python3 <skill-dir>/scripts/todo_cli.py set-status <active-contract-path> <task-id> completed` only after verification succeeds. If you need to append one concise lesson, use `python3 <skill-dir>/scripts/todo_cli.py add-learning <active-contract-path> "<entry>"`. Do not update status or learnings by editing YAML directly. Leave failures in_progress and report the exact blocker. Do not review.
 ```
 
-Add the executor-update restrictions from `references/executor_contract_update_policy.md` to the delegated prompt. Never assume an external executor will infer those restrictions from repository files alone.
+Add the executor-update restrictions from `references/executor_contract_update_policy.md` to the delegated prompt. Never assume an external executor will infer those restrictions from repository files alone. Tell the executor to return only: files changed, verification results, and unresolved issues.
 
-5. Tell the executor to return only: files changed, verification results, and unresolved issues.
-1. If the executor cannot start because of sandbox filesystem, log-path, socket, or permission errors: leave the task `pending`, append the exact error to `executor_history`, and stop. Do not automatically retry, switch providers, or send the project to another external executor.
-1. Documentation tasks follow the same rules: give the documentation executor only task IDs assigned to its executor ID, and require it to inspect implemented behavior and relevant tests using only its configured command and model.
+4. Expand the configured executor `command` and `args` — including `{skill_dir}` to the absolute skill directory so the resolved command is independent of the caller's working directory — but **do not run that command in the Lead session**. Prepare an isolated branch or worktree for non-trivial changes when the active harness supports it. Do not grant bypass permissions by default. Preserve repository instructions and least-privilege permissions.
+1. Spawn a direct-child **executor-runner** Subagent (Lead → runner only; no intermediate orchestrator). Pass only the already-approved invocation package: executor ID, expanded command and args, model, task IDs, `target_files`, active contract path, skill directory, and the constrained executor prompt. Instruct the runner to launch that command non-interactively, wait for process exit, and return only:
+
+```text
+exit_code: <process exit code, or start-failure code>
+changed_files: <paths observed after the run, or unknown>
+executor_self_reported_verification: <executor's claimed check results, or none>
+unresolved_issues: <start failures, timeouts, non-zero exits, missing outputs, or none>
+```
+
+The runner must not request new approvals, re-route selection, edit `target_files`, decide that verification passed, mark Lead-level completion, or review. Full runner rules are in `references/executor_runner.md`.
+
+6. **Wait** for the executor-runner Subagent to finish. Do not attach to or stream-monitor the executor process from the Lead session while the runner is active. Contract field updates reserved to the Lead, external-approval records, independent verification, and Reviewer launch stay in the Lead session.
+1. After the runner returns, independently run each task's `verification` locally (and contract validation when needed). Never accept the executor's or runner's self-report as verification. Only then treat the delegated work as ready for Step 6 or for status completion rules already applied by the executor via `todo_cli.py`.
+1. If the runner reports that the executor cannot start because of sandbox filesystem, log-path, socket, or permission errors: leave the task `pending`, append the exact error to `executor_history`, and stop. Do not automatically retry, switch providers, or send the project to another external executor.
+1. Documentation tasks follow the same runner path: give the documentation executor only task IDs assigned to its executor ID, require it to inspect implemented behavior and relevant tests using only its configured command and model, and still launch that command through the executor-runner Subagent.
 
 **Operating protocol** — the Lead and every executor, before changing even one line:
 
 1. **Fix the context:** read the active contract, confirm `project.goal` and `project.constraints`, set the assigned task from `pending` to `in_progress`, and save it.
 1. **Respect the edit boundary:** edit only that task's `target_files`, plus the contract fields each role may edit (Hard rules). Do not add unrequested code or files.
-1. **Verify objectively:** run the task's `verification` locally after implementation. Do not start another task until it passes.
+1. **Verify objectively:** the Lead runs the task's `verification` locally after the runner returns. Do not start another task until it passes. Do not treat runner or executor self-reports as final verification.
 1. **Synchronize:** use `scripts/todo_cli.py` for deterministic contract updates. On success set the task `completed` with `set-status`; if a project-specific bug pattern or specification trap was found, append it as one concise line to `learnings` with `add-learning`. On failure keep the task `in_progress`, record no completion, and report the exact command and failure to the Lead.
 
 ### Step 6 — Review in the Reviewer session
